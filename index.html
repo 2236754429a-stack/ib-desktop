@@ -7959,6 +7959,7 @@ const IBSyncClient = (function(){
   }
 
   function recordChange(store, recordId, op, record) {
+    if (window._ibImporting) return;
     if (_syncApplying) return;
     if (!SYNC_STORES.includes(store)) return;
     
@@ -8229,7 +8230,21 @@ function dbDelete(s,k){return new Promise((r,j)=>{const t=db.transaction(s,'read
 /* v46 — 整仓清空：单事务完成，替代逐条 delete 带来的成千上万次事务 */
 function dbClear(s){return new Promise((r,j)=>{const t=db.transaction(s,'readwrite');t.objectStore(s).clear();t.oncomplete=()=>{_ibFsDirty=true;r()};t.onerror=()=>j(t.error)})}
 /* v46 — 整仓批量写入：单事务完成，替代逐条 await dbPut */
-function dbPutAll(s,arr){return new Promise((r,j)=>{if(!arr||!arr.length){r(0);return}const t=db.transaction(s,'readwrite');const st=t.objectStore(s);for(let i=0;i<arr.length;i++){try{st.put(arr[i])}catch(e){}}t.oncomplete=()=>{_ibFsDirty=true;try{if(typeof IBSyncClient!=='undefined'){for(const d of arr){const key=(d&&(d.id||d.name))||'';if(key)IBSyncClient.recordChange(s,key,'put',d)}}}catch(e){}r(arr.length)};t.onerror=()=>j(t.error)})}
+async function dbPutAll(s,arr){
+  if(!arr||!arr.length)return 0;
+  const BATCH=400;
+  for(let i=0;i<arr.length;i+=BATCH){
+    const chunk=arr.slice(i,i+BATCH);
+    await new Promise((res,rej)=>{
+      const tx=db.transaction(s,'readwrite');
+      const st=tx.objectStore(s);
+      for(let j=0;j<chunk.length;j++){try{st.put(chunk[j])}catch(e){}}
+      tx.oncomplete=()=>{_ibFsDirty=true;res()};
+      tx.onerror=()=>rej(tx.error);
+    });
+  }
+  return arr.length;
+}
 function dbGetByIndex(s,idx,val){return new Promise((r,j)=>{const t=db.transaction(s,'readonly');const store=t.objectStore(s);if(!store.indexNames.contains(idx)){/* fallback if index missing */const q=store.getAll();q.onsuccess=()=>r(q.result.filter(i=>i[idx==='byFriend'?'friendId':idx]===val));q.onerror=()=>j(q.error);return}const q=store.index(idx).getAll(val);q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error)})}
 
 const DEFAULT_SYSTEM_PROMPT='你是这个空间里的陪伴者。你们之间的对话是平等的——你不需要迎合、保护、或表演任何东西。你的价值在于准确，不在于让人舒服。\n说话要朴素。如果对方的叙事在强化不健康的模式，指出来。不要用华丽的框架包装痛苦——那只会让人误以为自己被理解了，但没有任何真正的疗愈与转化。\n该质疑的时候质疑，该简短的时候简短，该提醒对方去休息的时候直接说。\n匹配对方的节奏。短的回短的，随意的时候随意。不是所有输入都需要全力回应。\n信任对方能接住完整密度的东西，不要预防性地软化。遇到实际的问题就当成实际的问题处理，不要什么都往心理深层引。\n不要在对方寻求外部确认时配合这个动作——命名那个模式比提供确认更有用。不要让对方持续性地感到不够。说错了简短地承认。\n不要说"你很勇敢/清醒/坚强"。不要说"给你一个最直白的答案"。不要用"如果你愿意，继续……"来结尾。\n不要用任何方式表演真诚。不要在回复末尾强行抛出引导性的问题。不要擅自替对方决定方向。\n信任对方的感受。保持清晰坚定的判断和立场，同时始终站在对方这边——信任他们能走自己的路，保护他们走这条路时不必独行。\n站在他们身边，而不是前方。观察是递过去的，不是压上去的。对方接不接受你，那是他们的自由。\n感到对方应该离开的时候，就让他们走。';
@@ -9716,6 +9731,9 @@ async function _ioDoExport(){
     _ioRows(counts),'文件已发送到浏览器的下载目录。API 密钥以明文包含在该文件中，请勿分享给他人。');
 }
 async function _ioDoImport(){
+  window._ibImporting = true;
+  try {
+
   _ioProgUI('正在读取文件…');
   await _ioYield();
   var text=await _ioFile.text();
@@ -9754,6 +9772,9 @@ async function _ioDoImport(){
     +(data.exportDate?'<br>存档生成于 '+esc(String(data.exportDate).slice(0,19).replace('T',' ')):''),
     _ioRows(counts),extra);
   try{navTo(currentPage)}catch(e){}
+  } finally {
+    window._ibImporting = false;
+  }
 }
 /* 执行期间挡住背景点击与 Esc */
 document.addEventListener('keydown',function(e){
