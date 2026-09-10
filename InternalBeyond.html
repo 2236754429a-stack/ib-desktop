@@ -11091,7 +11091,7 @@ function searchChat(q){
     container.innerHTML=results.slice(0,50).map(m=>{
       const isUser=m.role==='user';
       const sName=isUser?(_cachedUserName||'You'):(m.senderName||_getActiveAiName()||'AI');
-      const t=m.timestamp?new Date(m.timestamp).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'';
+      const t=m.timestamp?_ibFmtMsgTime(m.timestamp):'';
       return '<div class="chat-msg '+(isUser?'user':'ai')+'">'
         +'<div class="r-head">'+esc(sName)+(t?'<span class="r-time">'+t+'</span>':'')+'</div>'
         +'<div class="r-text">'+esc(m.content)+'</div>'
@@ -12237,7 +12237,7 @@ function _buildMsgEl(m,isFullscreen,isGroupCont){
   if(m.id)div.dataset.msgId=m.id;
   if(isFullscreen){
     const sName=isUser?(_cachedUserName||'You'):(m.senderName||_getActiveAiName()||'AI');
-    const timeStr=m.timestamp?new Date(m.timestamp).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'';
+    const timeStr=m.timestamp?_ibFmtMsgTime(m.timestamp):'';
     /* Determine if this sender uses the new avatar layout */
     const aiAvatar=!isUser?(_getApiAvatar(m.friendId)||_getApiAvatarByName(m.senderName)):'';
     const userAvatar=isUser?_cachedUserAvatar:'';
@@ -16058,7 +16058,20 @@ var _presenceStartupLastActive=0;try{_presenceStartupLastActive=parseInt(localSt
 var _welcomeSent=false;
 var _pageHiddenAt=0;/* 记录页面切到后台的时刻 */
 function _updateLastActive(){_lastActiveTime=Date.now();try{localStorage.setItem('ib_lastActive',String(_lastActiveTime))}catch(e){}}
-function _formatTime(ts){return new Date(ts).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}
+
+function _ibFmtMsgTime(ts){
+  if(!ts)return '';
+  const d=new Date(ts);
+  if(isNaN(d.getTime()))return '';
+  const now=new Date();
+  const hm=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  if(d.toDateString()===now.toDateString()) return hm;
+  const isSameYear=d.getFullYear()===now.getFullYear();
+  if(isSameYear) return (d.getMonth()+1)+'月'+d.getDate()+'日 '+hm;
+  return d.getFullYear()+'/'+(d.getMonth()+1)+'/'+d.getDate()+' '+hm;
+}
+
+function _formatTime(ts){return _ibFmtMsgTime(ts)}
 function _formatDate(ts){return new Date(ts).toLocaleDateString('zh-CN',{month:'short',day:'numeric'})}
 function _isSameDay(a,b){var d1=new Date(a),d2=new Date(b);return d1.getFullYear()===d2.getFullYear()&&d1.getMonth()===d2.getMonth()&&d1.getDate()===d2.getDate()}
 async function _checkWelcomeBack(lastActiveOverride){

@@ -11,6 +11,8 @@
 **本项目永久免费开源。**
 
 > 🌏 **手机版 / IB-Mobile**: [InternalBeyond-Mobile](https://github.com/Sui-IB/InternalBeyond-Mobile)
+> 
+> 🌏 **观影室** ：以外置 DLC 形式在V2.7.0版本单独发布。（[InternalBeyond-Cinema](https://github.com/Sui-IB/InternalBeyond-Cinema)）。
 
 <img width="2500" height="1239" alt="d840d23451506fdf34cf1015d1109a10" src="https://github.com/user-attachments/assets/a0bfd59d-f7d9-4e9e-8b26-58f6b0361a68" />
 
@@ -34,7 +36,7 @@
 | **Call** | 语音与视频通话 — 悬浮窗三合一（联系人 / 全局配置 / 通话面），语音识别转写 + 逐句朗读 + 声学语气参考 + 视频直播间 + 弹幕 + 礼物系统 + 来电 |
 | **Circle** | InternetBeyond 社交圈 — 用户与 AI 共同发布 / 评论 / 回复 / 转发动态，含好友资料页、可见范围、搜索、配图与定位 |
 | **Calendar** | AI 日历 — 悬浮小窗 + 挂历视窗，纪念日 / 生日 / 计划 / 记录，月相节气与传统节日，AI 读取临近日程、聊天中提起并留便笺 |
-| **Blog** | 日志 / 密码日记本 / AI 评论 / AI 批注 / 自定义剧本 |
+| **Blog** | 日志 / 密码日记本 / 评论 / 批注 / 自定义剧本 / 共读学习室 |
 | **Letters** | AI 书信 — 异步通信，AI 读取你的资料后写回信 |
 | **Memory** | 长期情感记忆库 — 星图可视化 + 自然衰减 + API 上下文自动注入 + Auto Memory（AI 自主记忆） |
 | **Music** | 本地音乐播放器 + 48 条频率可视化波形 |
@@ -43,6 +45,7 @@
 | **ICode** | AI 代码工作区 — 文件管理 + 预览 + 内联编辑 + 搜索定位 + 脚本沙箱运行 + 文档生成（DOCX / PDF / XLSX） |
 | **DIY** | 自定义透明立绘、占卜桌布、外部工具、MCP 服务器、Internal Bridge、沙箱扩展与文件解析库 |
 | **Data** | 一键备份（全站导出 / 导入 JSON）、Token 用量仪表盘、分类器拦截后的回退 |
+| **Cinema**（DLC） | 观影室 — 外置 DLC，单独下载 `IB-Cinema.js` 放到 `DLC/` 目录即出现在导航栏；与识图的 AI 一起看本机视频：每句附此刻一帧、字幕随消息、前情梗概、胶片时间轴（留影 / Talk / 梗概），点一格弹出那一刻的截图与两人对话 |
 
 ## ✦ 主题系统
 
@@ -96,7 +99,7 @@
 
 ### Call — 语音与视频通话
 
-从右下坞的 Call 图标或聊天附件菜单进入，悬浮窗包含联系人列表、全局配置与通话面三个面板。
+从右下坞的 Call 图标或聊天附件菜单进入，悬浮窗包含联系人列表、全局配置与通话面三个面板。每位联系人的卡上可单独开「语音条」：TA 在合适的消息末尾附一枚可点播的语音条（原声读消息原文，或选英 / 日 / 韩版——气泡照常中文，点心形看原文），声音沿用通话里给 TA 配的那套。
 
 **语音通话**
 
@@ -156,7 +159,7 @@
 
 ### Blog — 日志系统
 
-写日志、分类管理、AI 评论、AI 批注。密码日记本受密码保护，Tea 和 Story 存档默认保存至此，对所有 API 不可见。日志可触发 AI 生成记忆。支持邀请 AI 好友在阅读视图中为文章段落添加批注。
+写日志、分类管理、AI 评论、AI 批注、内置共读/学习室。密码日记本受密码保护，Tea 和 Story 存档默认保存至此，对所有 API 不可见。日志可触发 AI 生成记忆。支持邀请 AI 好友在阅读视图中为文章段落添加批注。
 
 
 ### Letters — 信件系统
@@ -167,11 +170,15 @@
 <img width="2487" height="1253" alt="QQ_1785874015075" src="https://github.com/user-attachments/assets/bbd41176-1287-4d78-a86c-bc44b8266b6c" />
 
 
+### Cinema — 观影室（外置 DLC）
+
+不在主文件里：到 [Sui-IB/InternalBeyond-Cinema](https://github.com/Sui-IB/InternalBeyond-Cinema) 下载 `IB-Cinema.js`，放到 `InternalBeyond.html` 同级的 `DLC/` 目录（路径 `DLC/IB-Cinema.js`），刷新后导航栏出现 Cinema；没有这个文件时导航栏没有 Cinema，其余功能不受影响。选一部本机视频与识图的 TA 一起看：每条消息附此刻一帧（画质 384px 至原画质可选），可加 .srt / .vtt 字幕随消息附播放点之前的几句，每隔一段把字幕压成前情梗概，看完可「回顾」整片；留影、Talk、梗概都落在胶片时间轴上，点一格弹出那一刻的截图与两人的对话。视频与字幕不入库、不随备份、不续播；聊天进「观影 · 片名」话题频道，与其它频道一样随备份互通。
+
 ### Memory — 长期记忆库
 
 借鉴 GitHub Ombre Brain 理念的 AI 长期记忆系统。每条记忆带有情感坐标（效价 / 唤醒度）、重要性评分和自然衰减。星图以二维情感坐标可视化所有记忆，时间轴以行星形态展示分布。最多 7 条置顶记忆，四种可见性级别。多来源创建（手动 / Chat / Blog / Letters / Story / Tea）。API 调用时自动检索相关记忆注入上下文，Token 预算可配置。
 
-- **Auto Memory**：每个 API 可独立开启的 AI 自主长期记忆。AI 在对话中自行决定何时创建、更新记忆，档案以舷窗（Porthole）液态玻璃镜片可视化展示。支持归档后的 API 档案保留。
+- **Auto Memory**：每个 API 可独立开启的 AI 自主长期记忆。AI 在对话中自行决定何时创建、更新记忆，档案以舷窗（Porthole）液态玻璃镜片可视化展示。支持归档后的 API 档案保留。每条档案可在卡上直接切优先级（★ always / ◐ normal / ○ low）；AI 要写入或改动 always 级条目时先出确认卡（写入 always / 改为 normal / 不写），点了才落库。always 条目随人设一起进 system 被提示缓存记住，只在这些条目本身改动时重建一次。
 
 
 ### ICode — AI 代码工作区
@@ -247,6 +254,8 @@ IB 支持多种 AI 服务（最多 10 个端口）：
 
 ```
 InternalBeyond.html       ← 主文件（浏览器打开这个）
+DLC/
+  IB-Cinema.js             ← 观影室（可选外置 DLC，另一个仓库单独下载）
 IB压缩版.html              ← 手机版（与电脑端共享数据）
 game/
   game_module.js           ← 像素房间引擎
