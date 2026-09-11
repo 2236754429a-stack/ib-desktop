@@ -11064,7 +11064,7 @@ function editApi(id){
   if(streamEl)streamEl.checked=cfg.streaming!==undefined?!!cfg.streaming:!!(PROVIDERS[cfg.provider]&&PROVIDERS[cfg.provider].streaming);
   var _amT=document.getElementById('api-automem-toggle');if(_amT)_amT.checked=!!cfg.autoMem;
   var _amM=document.getElementById('api-automem-mode');if(_amM)_amM.value=cfg.autoMemMode||'hybrid';
-  var _amB=document.getElementById('api-automem-budget');if(_amB)_amB.value=cfg.autoMemBudget||1200;
+  var _amB=document.getElementById('api-automem-budget');if(_amB)_amB.value=cfg.autoMemBudget||8000;
   var _amR=document.getElementById('api-automem-recordonly');if(_amR)_amR.checked=!!cfg.amRecordOnly;
   var _mwT=document.getElementById('api-memwrite-toggle');if(_mwT)_mwT.checked=!!cfg.memWrite;/* v76 r2 */
   var _pcT=document.getElementById('api-cache-toggle');if(_pcT)_pcT.checked=cfg.promptCache!==false;
@@ -16193,7 +16193,7 @@ async function updateChatCount(){
 /* READING LIMITS */
 const DEFAULT_READ_CHAT=5,DEFAULT_READ_POSTS=5,DEFAULT_READ_GROUP_CHAT=10;
 /* MEMORY SETTINGS */
-const DEFAULT_MEM_BUDGET=2000,DEFAULT_MEM_CONTENT_LEN=200;
+const DEFAULT_MEM_BUDGET=15000,DEFAULT_MEM_CONTENT_LEN=4000;
 async function getMemorySettings(){
   try{
     const cfg=await dbGet('apiSettings','memorySettings');
@@ -23791,7 +23791,7 @@ async function amBuildInject(cfg,queryText){
   out.sys=_amInstrBlock(cfg);
   if(!entries.length){out.tail='【记忆档案（共 0 条，勿向对方复述此段）】\n（目前为空）';return out}
   const mode=cfg.autoMemMode||'hybrid';
-  const budget=Math.max(300,parseInt(cfg.autoMemBudget)||1200);
+  const budget=Math.max(300,parseInt(cfg.autoMemBudget)||8000);
 
   const kws=(()=>{try{return _extractKeywords(String(queryText||''))}catch(e){return []}})();
   const head='【记忆档案（共 '+entries.length+' 条，勿向对方复述此段）】';
@@ -24123,8 +24123,8 @@ async function apiDeleteDay(btn,fid,k){
 async function getMemoryContext(apiId,opts){
   opts=opts||{};
   const memSettings=await getMemorySettings();
-  const maxChars=opts.maxChars||memSettings.budget||2000;
-  const contentLen=memSettings.contentLen||200;
+  const maxChars=opts.maxChars||memSettings.budget||15000;
+  const contentLen=memSettings.contentLen||4000;
   const isGroup=opts.isGroup||false;
   const groupMemEnabled=opts.groupMemEnabled||false;
   const userMsg=opts.userMessage||'';
@@ -24925,7 +24925,7 @@ async function updateMemDashboard(){
   var scored=all.map(function(m){return Object.assign({},m,{_s:getMemoryScore(m)})}).filter(function(m){return m.visibility!=='private'}).sort(function(a,b){return b._s-a._s});
   var est=0;
   for(var si=0;si<scored.length;si++){
-    var len=(scored[si].title||'').length+(scored[si].content||'').slice(0,memS.contentLen||200).length+30;
+    var len=(scored[si].title||'').length+(scored[si].content||'').slice(0,memS.contentLen||4000).length+30;
     if(est+len>limit)break;est+=len;
   }
   el=document.getElementById('mem-token-est');if(el)el.textContent=est;
