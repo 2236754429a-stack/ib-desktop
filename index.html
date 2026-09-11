@@ -5407,6 +5407,7 @@ body:not(.theme-infernal) .chat-music-card{background:rgba(250,253,255,.58);bord
           <div class="blog-stats" id="blog-stats"></div>
           <div class="blog-side-rule"></div>
           <div class="blog-actions"><button class="btn btn-primary" onclick="openEditor()">+ 写日志</button>
+            <button class="btn" onclick="IBDocImporter.pickAndImport()">+ 导入图书/PDF</button>
             <button class="btn" onclick="openCatModal()">+ 分类</button>
             <button class="btn" id="diary-pwd-btn" style="display:none" onclick="showChangeDiaryPwd()">修改密码</button>
             <button class="btn" id="pwd-diary-btn" onclick="togglePwdDiary()">密码日记本</button>
@@ -6226,10 +6227,17 @@ body:not(.theme-infernal) .chat-music-card{background:rgba(250,253,255,.58);bord
         <div class="api-form-group" style="margin-bottom:10px">
           <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleSummaryMgmt()"><span style="display:flex;align-items:center;gap:8px"><span class="api-fold-btn" id="summary-mgmt-caret">&#9656;</span><span class="api-fold-label">摘要管理</span></span><span style="font-weight:400;opacity:0.55;font-size:0.72rem" id="summary-mgmt-count"></span></label>
         </div>
-        <div class="api-form-group" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
-          <button class="btn btn-primary" type="button" onclick="startDaddySummaryBatch()">整理 daddy 历史摘要</button>
-          <button class="btn" type="button" onclick="cancelDaddySummaryBatch()" id="daddy-summary-cancel" style="display:none">暂停</button>
-          <span id="daddy-summary-status" style="font-size:0.75rem;opacity:0.7"></span>
+        <div class="glass-card" style="padding:14px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(175,195,228,0.22);margin:10px 0 14px">
+          <div style="font-weight:600;font-size:0.86rem;margin-bottom:6px;color:var(--accent-light, #70a0e0)">批量整理历史会话摘要</div>
+          <div style="font-size:0.75rem;opacity:0.75;margin-bottom:10px;line-height:1.6">将导入的 Kelivo 历史聊天按原标题恢复为独立话题频道，并由 AI 自动生成独立历史摘要。</div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <select id="daddy-summary-target-select" style="padding:6px 10px;font-size:0.8rem;border-radius:6px;background:rgba(0,0,0,0.25);color:inherit;border:1px solid rgba(175,195,228,0.35);min-width:140px">
+              <option value="">加载角色列表中…</option>
+            </select>
+            <button class="btn btn-primary" type="button" id="daddy-summary-start-btn" onclick="startDaddySummaryBatch()">开始批量整理</button>
+            <button class="btn" type="button" onclick="cancelDaddySummaryBatch()" id="daddy-summary-cancel" style="display:none">暂停</button>
+          </div>
+          <div id="daddy-summary-status" style="font-size:0.75rem;margin-top:10px;line-height:1.5;color:var(--accent-light, #70a0e0)">就绪：请选择角色并点击开始</div>
         </div>
         <div id="summary-mgmt-list" style="display:none;flex-direction:column;gap:6px"></div>
       </div>
@@ -6349,6 +6357,7 @@ body:not(.theme-infernal) .chat-music-card{background:rgba(250,253,255,.58);bord
         <button class="btn btn-primary" style="padding:4px 12px;font-size:0.8rem" onclick="IBSyncClient.syncNow(true)">立即同步</button>
         <button class="btn" style="padding:4px 10px;font-size:0.8rem" onclick="IBSyncClient.toggleSettings()">配置</button>
         <button class="btn" style="padding:4px 10px;font-size:0.8rem;color:var(--accent-light, #70a0e0)" onclick="IBSyncClient.uploadAllLocalData()">全量上传本地数据到云端</button>
+        <button class="btn" style="padding:4px 10px;font-size:0.8rem;color:var(--accent-light, #70a0e0)" onclick="IBSyncClient.downloadAllFromCloud()">从云端全量拉取数据</button>
       </div>
       <div id="ib-sync-config-panel" style="display:none;padding:12px;margin-top:10px;border-radius:8px;background:rgba(0,0,0,0.15);font-size:0.8rem">
         <div style="margin-bottom:8px">
@@ -7883,6 +7892,102 @@ function openDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open
 /* ═══════════════════════════════════════════════════════════════════
  * InternalBeyond Cloud Sync Client (腾讯云轻量同步客户端)
  * ═══════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════
+ * IBDocImporter: 多格式图书/PDF/文章导入引擎（赋能共读与书库）
+ * ═══════════════════════════════════════════════════════════════════ */
+const IBDocImporter = (function(){
+  function toBase64(buf){
+    let binary = '';
+    const bytes = new Uint8Array(buf);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i += 32768) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + 32768, len)));
+    }
+    return btoa(binary);
+  }
+
+  async function importFile(file){
+    if(!file) return;
+    const ext = file.name.split('.').pop().toLowerCase();
+    const title = file.name.replace(/\.[^.]+$/, '') || '未命名文档';
+    try {
+      if(typeof toast==='function') toast('正在解析「'+title+'」…');
+      let bookTitle = title;
+      let bookContent = '';
+
+      if(ext === 'txt' || ext === 'md' || ext === 'markdown'){
+        bookContent = await file.text();
+      } else if(ext === 'epub') {
+        const chapters = await _wsExtractEpubChapters(new Uint8Array(await file.arrayBuffer()));
+        bookContent = chapters.map(function(c){ return (c.title ? '# ' + c.title + '\n\n' : '') + c.text; }).join('\n\n---\n\n');
+      } else if(ext === 'pdf') {
+        const buf = await file.arrayBuffer();
+        const b64 = toBase64(buf);
+        const resp = await fetch('https://notes.emberroom.cn/api/ib-sync/parse-document', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: file.name, kind: ext, data: b64 })
+        });
+        if(!resp.ok) {
+          const err = await resp.json().catch(()=>({}));
+          throw new Error(err.detail || ('解析接口异常: ' + resp.status));
+        }
+        const data = await resp.json();
+        bookTitle = data.title || title;
+        if(!data || !Array.isArray(data.chapters)) throw new Error('解析接口未返回有效章节');
+        bookContent = data.chapters.filter(function(c){ return c && typeof c.text === 'string' && c.text.trim(); }).map(function(c){ return (c.title ? '# ' + c.title + '\n\n' : '') + c.text; }).join('\n\n---\n\n');
+      } else {
+        throw new Error('不支持的文件格式（支持 PDF / EPUB / TXT / Markdown）');
+      }
+
+      if(!bookContent.trim()){
+        throw new Error('未提取到可读文本');
+      }
+
+      const post = {
+        id: 'post_' + Date.now(),
+        title: bookTitle,
+        content: bookContent,
+        category: '共读书库',
+        format: ext === 'txt' ? 'txt' : 'md',
+        locked: diaryMode,
+        date: new Date().toISOString(),
+        tags: ['共读', ext.toUpperCase()],
+        created: Date.now(),
+        updated: Date.now()
+      };
+      await dbPut('categories', {name: '共读书库'});
+      await dbPut('posts', post);
+      if(typeof loadPosts==='function') await loadPosts();
+      alert('成功将《' + bookTitle + '》导入书库！\n现在可以在日志或共读间中阅读此书。');
+    } catch(e) {
+      console.error(e);
+      alert('导入失败: ' + e.message);
+    }
+  }
+
+  function pickAndImport(){
+    let inp = document.getElementById('ib-doc-import-input');
+    if(!inp){
+      inp = document.createElement('input');
+      inp.id = 'ib-doc-import-input';
+      inp.type = 'file';
+      inp.accept = '.pdf,.epub,.txt,.md,.markdown';
+      inp.style.display = 'none';
+      document.body.appendChild(inp);
+      inp.onchange = function(){
+        const f = inp.files && inp.files[0];
+        inp.value = '';
+        if(f) importFile(f);
+      };
+    }
+    inp.click();
+  }
+
+  return { pickAndImport };
+})();
+
 const IBSyncClient = (function(){
   const STORAGE_KEY_CFG = "ib_cloud_sync_cfg";
   const STORAGE_KEY_OUTBOX = "ib_cloud_sync_outbox";
@@ -8180,7 +8285,7 @@ const IBSyncClient = (function(){
       }
 
       let uploaded = 0;
-      const batchSize = 300;
+      const batchSize = 120;
       for (let i = 0; i < totalChanges.length; i += batchSize) {
         const chunk = totalChanges.slice(i, i + batchSize);
         setStatus(`全量上传进度: ${i}/${totalChanges.length} 条…`, "上传中…", "#e0a040");
@@ -8210,10 +8315,64 @@ const IBSyncClient = (function(){
     }
   }
 
+
+  async function downloadAllFromCloud() {
+    if (_isSyncing) return;
+    const cfg = getCfg();
+    if (!confirm("确定要从腾讯云拉取全部聊天记录、话题、摘要与日历并存入本机吗？")) return;
+    _isSyncing = true;
+    setStatus("正在连接腾讯云并全量拉取…", "正在拉取…", "#e0a040");
+    try {
+      let sinceSeq = 0;
+      let totalPulled = 0;
+      let hasMore = true;
+      _syncApplying = true;
+      while (hasMore) {
+        setStatus(`正在从云端拉取: 已拉取 ${totalPulled} 条…`, "拉取中…", "#e0a040");
+        const resp = await fetch(`${cfg.serverUrl}/pull?sinceSeq=${sinceSeq}&limit=1500`, {
+          headers: { "X-Sync-Token": cfg.token }
+        });
+        if (!resp.ok) throw new Error(`拉取失败 (${resp.status})`);
+        const data = await resp.json();
+        if (!data.ok) throw new Error("云端返回异常");
+
+        if (data.changes && data.changes.length > 0) {
+          for (const ch of data.changes) {
+            if (!SYNC_STORES.includes(ch.store)) continue;
+            if (ch.op === "put" && ch.record) {
+              await dbPut(ch.store, ch.record);
+              totalPulled++;
+            } else if (ch.op === "delete") {
+              await dbDelete(ch.store, ch.recordId);
+            }
+            if (ch.serverSeq > sinceSeq) sinceSeq = ch.serverSeq;
+          }
+        }
+        hasMore = !!data.hasMore;
+        if (data.currentSeq != null && sinceSeq < data.currentSeq && (!data.changes || data.changes.length === 0)) {
+          sinceSeq = data.currentSeq;
+        }
+      }
+      localStorage.setItem(STORAGE_KEY_SEQ, String(sinceSeq));
+      _syncApplying = false;
+      setStatus(`全量拉取完成！共恢复 ${totalPulled} 条记录`, "🟢 已同步", "var(--accent-light, #70a0e0)");
+      alert(`数据已全部恢复！共从云端拉取 ${totalPulled} 条历史数据并存入本机。正在刷新页面展现…`);
+      location.reload();
+    } catch(e) {
+      _syncApplying = false;
+      console.error(e);
+      setStatus(`全量拉取中断: ${e.message}`, "⚠️ 异常", "#e06060");
+      alert(`全量拉取失败: ${e.message}`);
+    } finally {
+      _isSyncing = false;
+    }
+  }
+
   return {
     recordChange,
     syncNow,
     uploadAllLocalData,
+    downloadAllFromCloud,
     initUI,
     toggleAutoSync,
     toggleSettings,
@@ -8233,17 +8392,39 @@ function dbClear(s){return new Promise((r,j)=>{const t=db.transaction(s,'readwri
 async function dbPutAll(s,arr){
   if(!arr||!arr.length)return 0;
   const BATCH=400;
+  let written=0;
   for(let i=0;i<arr.length;i+=BATCH){
     const chunk=arr.slice(i,i+BATCH);
-    await new Promise((res,rej)=>{
+    try{await new Promise((res,rej)=>{
       const tx=db.transaction(s,'readwrite');
       const st=tx.objectStore(s);
-      for(let j=0;j<chunk.length;j++){try{st.put(chunk[j])}catch(e){}}
-      tx.oncomplete=()=>{_ibFsDirty=true;res()};
-      tx.onerror=()=>rej(tx.error);
-    });
+      let firstErr=null;
+      function fail(e){firstErr=e;tx.abort()}
+      function put(item){try{st.put(item)}catch(e){fail(e)}}
+      tx.oncomplete=()=>{_ibFsDirty=true;written+=chunk.length;res()};
+      tx.onerror=()=>rej(firstErr||tx.error||new Error('事务写入失败'));
+      tx.onabort=()=>rej(firstErr||tx.error||new Error('事务已中止'));
+      try{
+        for(const source of chunk){
+          const item=source&&typeof source==='object'?Object.assign({},source):source;
+          if(s==='apiConfigs'&&item&&item.id){
+            const req=st.get(item.id);
+            req.onsuccess=()=>{
+              const cur=req.result;
+              if(cur&&cur.apiKey&&!item.apiKey)item.apiKey=cur.apiKey;
+              if(cur&&cur.endpoint&&!item.endpoint)item.endpoint=cur.endpoint;
+              put(item);
+            };
+          }else{st.put(item)}
+        }
+      }catch(e){fail(e)}
+    })}catch(e){
+      const err=new Error('写入 '+s+' 失败：'+(e&&e.message||e));
+      err.written=written;
+      throw err;
+    }
   }
-  return arr.length;
+  return written;
 }
 function dbGetByIndex(s,idx,val){return new Promise((r,j)=>{const t=db.transaction(s,'readonly');const store=t.objectStore(s);if(!store.indexNames.contains(idx)){/* fallback if index missing */const q=store.getAll();q.onsuccess=()=>r(q.result.filter(i=>i[idx==='byFriend'?'friendId':idx]===val));q.onerror=()=>j(q.error);return}const q=store.index(idx).getAll(val);q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error)})}
 
@@ -9149,6 +9330,7 @@ async function _edImportOne(f){
 async function _edCreateDocPost(name,ext,text,sub){
   var t=String(text||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
   if(!t.trim()){toast('这个文件里没有提取到文字');return}
+  if(_wsRichIsFailText(t))throw new Error(t);
   var cat=(document.getElementById('ed-cat')||{}).value||'';
   var id='post_'+Date.now();
   await dbPut('posts',{id:id,title:String(name).replace(/\.[^.]+$/,'').slice(0,80),
@@ -9749,7 +9931,7 @@ async function _ioDoImport(){
     await _ioYield();
     if(!Array.isArray(arr)||!arr.length){counts[name]=0;continue}
     try{await dbPutAll(name,arr);counts[name]=arr.length;done+=arr.length}
-    catch(e){counts[name]=0;skipped.push(IO_STORE_CN[name]||name)}
+    catch(e){counts[name]=e.written||0;done+=counts[name];skipped.push((IO_STORE_CN[name]||name)+'（'+(e.message||'写入失败')+'）')}
   }
   _ioStep('正在刷新站内状态…',94);
   await _ioYield();
@@ -9765,7 +9947,7 @@ async function _ioDoImport(){
   _ioStep('完成',100);
   var unknown=Object.keys(data).filter(function(k){return Array.isArray(data[k])&&list.indexOf(k)<0});
   var extra='';
-  if(skipped.length)extra+='以下类别写入失败，已跳过：'+esc(skipped.join('、'))+'。<br>';
+  if(skipped.length)extra+='以下类别未完整写入（已计入此前成功的批次）：'+esc(skipped.join('、'))+'。<br>';
   if(unknown.length)extra+='存档中有本版本不认识的类别，已忽略：'+esc(unknown.join('、'))+'。<br>';
   extra+='导入为合并写入，站内原有而存档中没有的记录未被删除。';
   _ioResult(!skipped.length,'导入完成，共写入 <b>'+done+'</b> 条记录。'
@@ -9982,7 +10164,7 @@ function _ibGuardInit(){
   document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden'){if(_ibFsDirty&&_ibFsState==='granted')_ibFsSyncNow('hidden')/* 切后台即抢写一份，静默 */}});
   _ibRenderGuardPanel();
 }
-async function importAll(e){const file=e.target.files[0];if(!file)return;try{const text=await file.text();const data=JSON.parse(text);for(const _s of IB_STORES){if(_s==='music')continue;if(Array.isArray(data[_s])&&data[_s].length){try{await dbPutAll(_s,data[_s])}catch(_e){}}}await migrateLockedPosts();try{localStorage.removeItem('ib_guardMuted')}catch(e2){}var _go=document.getElementById('ib-guard-overlay');if(_go){_go.remove();_ibGuardShown=false}_ibToolsCache=null;/* 导入可能带来新的外部工具配置，使缓存失效 */await loadApiConfigs();_refreshCachedUserName();_calEarliest=null;/* 同步刷新内存缓存：API 配置、用户名头像、日历最早日期 */try{if(window.IBCAL&&IBCAL.invalidate)await IBCAL.invalidate()}catch(_e3){}/* fix-r7：同 _ioDoImport，老入口一并重建日历缓存 */try{await _ibMemOneLineRepairD()}catch(_e4){}toast('数据已导入');navTo(currentPage)}catch(err){toast('导入失败：文件格式错误')}e.target.value=''}
+async function importAll(e){const file=e.target.files[0];if(!file)return;try{const text=await file.text();const data=JSON.parse(text);for(const _s of IB_STORES){if(_s==='music')continue;if(Array.isArray(data[_s])&&data[_s].length){await dbPutAll(_s,data[_s])}}await migrateLockedPosts();try{localStorage.removeItem('ib_guardMuted')}catch(e2){}var _go=document.getElementById('ib-guard-overlay');if(_go){_go.remove();_ibGuardShown=false}_ibToolsCache=null;/* 导入可能带来新的外部工具配置，使缓存失效 */await loadApiConfigs();_refreshCachedUserName();_calEarliest=null;/* 同步刷新内存缓存：API 配置、用户名头像、日历最早日期 */try{if(window.IBCAL&&IBCAL.invalidate)await IBCAL.invalidate()}catch(_e3){}/* fix-r7：同 _ioDoImport，老入口一并重建日历缓存 */try{await _ibMemOneLineRepairD()}catch(_e4){}toast('数据已导入');navTo(currentPage)}catch(err){toast('导入未完成：'+(err&&err.message||'文件格式错误'))}e.target.value=''}
 function esc(s){if(!s)return'';const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 
 
@@ -15819,7 +16001,8 @@ async function renderSummaryMgmt(){
         +'<div class="summary-detail" style="display:none">'+esc(s.summary||'（空）')+'</div>'
         +'</div>'
     }).join('');
-  }catch(e){list.innerHTML=''}
+    try{if(typeof _daddySummaryPopulateSelect==='function')_daddySummaryPopulateSelect()}catch(e){}
+  }catch(e){list.innerHTML='';try{if(typeof _daddySummaryPopulateSelect==='function')_daddySummaryPopulateSelect()}catch(e){}}
 }
 function toggleSummaryDetail(el){var d=el.querySelector('.summary-detail');if(d)d.style.display=d.style.display==='none'?'block':'none'}
 async function deleteSingleSummary(id){
@@ -15938,12 +16121,35 @@ function _daddySummarySetBusy(on){const b=document.querySelector('button[onclick
 function _daddySummarySleep(ms){return new Promise(r=>setTimeout(r,ms))}
 async function _daddySummaryProgress(){try{return await dbGet('apiSettings','daddySummaryBatch')}catch(e){return null}}
 async function _daddySummarySaveProgress(p){try{await dbPut('apiSettings',Object.assign({id:'daddySummaryBatch'},p))}catch(e){}}
+async function _daddySummaryPopulateSelect(){
+  const sel=document.getElementById('daddy-summary-target-select');
+  if(!sel)return;
+  const all=(typeof apiConfigs!=='undefined'&&Array.isArray(apiConfigs))?apiConfigs:await dbGetAll('apiConfigs');
+  if(!all.length){sel.innerHTML='<option value="">暂无可用 API 角色</option>';return}
+  let html='';let defVal='';
+  for(const c of all){
+    if(c.archived)continue;
+    const name=c.nickname||c.model||'未命名';
+    const isDad=String(name).toLowerCase().includes('daddy')||String(name).includes('烬');
+    if(!defVal&&isDad)defVal=c.id;
+    html+='<option value="'+c.id+'"'+(isDad?' selected':'')+'>'+esc(name)+'</option>';
+  }
+  sel.innerHTML=html||'<option value="">请先在下方添加角色</option>';
+  if(defVal)sel.value=defVal;
+}
 async function _daddySummaryFindCfg(){
   const all=(typeof apiConfigs!=='undefined'&&Array.isArray(apiConfigs))?apiConfigs:await dbGetAll('apiConfigs');
-  return all.find(c=>c&&!c.archived&&String(c.nickname||'').trim().toLowerCase()==='daddy')||null;
+  const sel=document.getElementById('daddy-summary-target-select');
+  const sid=sel?sel.value:'';
+  if(sid){const found=all.find(c=>c&&c.id===sid);if(found)return found}
+  return all.find(c=>c&&!c.archived&&(String(c.nickname||'').toLowerCase().includes('daddy')||String(c.nickname||'').includes('烬')))||all[0]||null;
 }
 async function _daddySummaryRestoreThreads(cfg){
-  const all=(await dbGetByIndex('chatMessages','byFriend',cfg.id)).filter(m=>m&&!m._kelivoConversationMeta&&m._kelivoConversationId);
+  let all=(await dbGetByIndex('chatMessages','byFriend',cfg.id)).filter(m=>m&&!m._kelivoConversationMeta&&m._kelivoConversationId);
+  if(!all.length){
+    const allMsgs=await dbGetAll('chatMessages');
+    all=allMsgs.filter(m=>m&&!m._kelivoConversationMeta&&m._kelivoConversationId);
+  }
   const grouped={};
   for(const m of all)(grouped[m._kelivoConversationId]||(grouped[m._kelivoConversationId]=[])).push(m);
   const existing=await dbGetAll('chatThreads');
@@ -15952,13 +16158,12 @@ async function _daddySummaryRestoreThreads(cfg){
     const source=grouped[cid].slice().sort((a,b)=>(a.timestamp||0)-(b.timestamp||0));
     let thread=existing.find(t=>t&&t.friendId===cfg.id&&t._kelivoConversationId===cid);
     if(!thread){
-      const title=(source.find(m=>m._kelivoConversationTitle)?._kelivoConversationTitle)||('Kelivo · '+cid.slice(0,8));
+      const title=(source.find(m=>m._kelivoConversationTitle)?._kelivoConversationTitle)||('会话 · '+cid.slice(0,8));
       thread={id:'thread_kelivo_'+cid,friendId:cfg.id,name:title,created:source[0]?.timestamp||Date.now(),memoryEnabled:false,_kelivoConversationId:cid,_kelivoImported:true};
       await dbPut('chatThreads',thread);
     }
-    let changed=0;
-    for(const m of source){if(m.threadId!==thread.id){m.threadId=thread.id;await dbPut('chatMessages',m);changed++}}
-    threads.push({thread, messages:source, changed});
+    for(const m of source){let d=false;if(m.threadId!==thread.id){m.threadId=thread.id;d=true}if(m.friendId!==cfg.id){m.friendId=cfg.id;d=true}if(d)await dbPut('chatMessages',m)}
+    threads.push({thread,messages:source});
   }
   return threads;
 }
@@ -15976,39 +16181,65 @@ async function _daddySummaryOne(cfg,item,ss,index,total){
     const chunk=msgs.slice(start,start+chunkSize);
     let sumCfg=cfg;
     if(ss.summaryApiId){const picked=apiConfigs.find(a=>a.id===ss.summaryApiId);if(picked&&picked.apiKey&&picked.endpoint)sumCfg=picked}
-    const text=await generateSummary(sumCfg,previous,chunk,limit,{user:await _getProfileName(),ai:cfg.nickname||cfg.model||'daddy'});
+    const text=await generateSummary(sumCfg,previous,chunk,limit,{user:await _getProfileName(),ai:cfg.nickname||cfg.model||'AI'});
     calls++;
     if(!text)throw new Error('摘要 API 未返回内容');
     previous=text;
-    await _daddySummarySaveProgress({state:'running',friendId:cfg.id,threadId:item.thread.id,conversationId:item.thread._kelivoConversationId,doneMessages:start+chunk.length,totalMessages:msgs.length,updated:Date.now()});
     await _daddySummarySleep(1200);
   }
   await dbPut('chatSummaries',{id:key,friendId:cfg.id,threadId:item.thread.id,summary:previous,coveredUpTo:msgs[msgs.length-1].timestamp,coveredCount:msgs.length,updated:Date.now(),authorName:(cfg.nickname||cfg.model||'AI')+'（批量整理）',sealTimestamp:0,_daddyBulkComplete:true});
   return {calls,skipped:false};
 }
 async function startDaddySummaryBatch(){
-  if(_summarizing||window._daddySummaryBatchRunning)return;
+  if(window._daddySummaryBatchRunning){
+    _daddySummaryStatus('当前已有整理任务正在运行中…');return;
+  }
+  _daddySummaryStatus('正在检查角色与配置…');
   const cfg=await _daddySummaryFindCfg();
-  if(!cfg){toast('找不到昵称为 daddy 的 API 配置');return}
-  if(!cfg.apiKey||!cfg.endpoint){toast('daddy 的 API 缺少 Endpoint 或 Key');return}
+  if(!cfg){
+    _daddySummaryStatus('提示：未找到可用角色，请在下方添加或配置角色');
+    alert('未找到可用的角色配置！请在下方添加角色并填入 API Key。');
+    return;
+  }
+  if(!cfg.apiKey||!cfg.endpoint){
+    _daddySummaryStatus('提示：角色「'+(cfg.nickname||'AI')+'」缺少 API Key 或 Endpoint');
+    alert('角色「'+(cfg.nickname||'AI')+'」未配置有效的 API Key 或 Endpoint！请在下方编辑该 API 并填入密钥后保存。');
+    return;
+  }
   const ss=await getSummarySettings();
+  _daddySummaryStatus('正在扫描并恢复历史会话…');
   const items=await _daddySummaryRestoreThreads(cfg);
-  if(!items.length){toast('没有找到 daddy 的 Kelivo 历史消息');return}
+  if(!items.length){
+    _daddySummaryStatus('未找到该角色的历史会话（请确认已导入聊天记录）');
+    alert('未找到该角色的历史会话！请先点击顶部 Import 导入 Kelivo 聊天记录 JSON。');
+    return;
+  }
   window._daddySummaryBatchRunning=true;_daddySummaryBatchCancelled=false;_daddySummarySetBusy(true);
   let done=0,skipped=0,failed=0,calls=0;
   try{
     for(const item of items){
       if(_daddySummaryBatchCancelled)break;
       done++;
-      _daddySummaryStatus('daddy：正在整理 '+done+'/'+items.length+' 个会话');
-      try{const r=await _daddySummaryOne(cfg,item,ss,done,items.length);if(r.skipped)skipped++;calls+=r.calls||0}
-      catch(e){failed++;await _daddySummarySaveProgress({state:'failed',friendId:cfg.id,threadId:item.thread.id,error:String(e.message||e),updated:Date.now()});_daddySummaryStatus('daddy：失败 '+done+'/'+items.length+'，可重试');await _daddySummarySleep(2500)}
+      const title=item.thread.name||('会话 '+done);
+      _daddySummaryStatus('正在整理 ('+done+'/'+items.length+'): '+title+' …');
+      try{
+        const r=await _daddySummaryOne(cfg,item,ss,done,items.length);
+        if(r.skipped)skipped++;
+        calls+=r.calls||0;
+      }catch(e){
+        failed++;
+        console.warn('[DaddySummary] 跳过会话:', e);
+        _daddySummaryStatus('会话 '+done+' 遇到网络或调用异常，继续下一条…');
+        await _daddySummarySleep(2000);
+      }
     }
-    const state=_daddySummaryBatchCancelled?'paused':'complete';
-    await _daddySummarySaveProgress({state,friendId:cfg.id,processed:done,total:items.length,skipped,failed,calls,updated:Date.now()});
-    _daddySummaryStatus((state==='paused'?'已暂停':'已完成')+' · '+done+'/'+items.length+' · 跳过 '+skipped+' · 失败 '+failed);
+    const state=_daddySummaryBatchCancelled?'已暂停':'整理完毕';
+    _daddySummaryStatus(state+' · 共处理 '+done+'/'+items.length+' 个会话 (跳过 '+skipped+'，异常 '+failed+')');
+    alert('历史摘要整理完成！已为相关会话生成独立历史摘要。');
     await renderSummaryMgmt();
-  }finally{window._daddySummaryBatchRunning=false;_daddySummarySetBusy(false)}
+  }finally{
+    window._daddySummaryBatchRunning=false;_daddySummarySetBusy(false);
+  }
 }
 function cancelDaddySummaryBatch(){_daddySummaryBatchCancelled=true;_daddySummaryStatus('正在完成当前请求，随后暂停…')}
 
