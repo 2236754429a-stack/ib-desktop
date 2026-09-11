@@ -5368,7 +5368,9 @@ body:not(.theme-infernal) .chat-music-card{background:rgba(250,253,255,.58);bord
     </div>
     <button class="nav-btn" onclick="ioOpen('export')" title="导出存档">Export</button>
     <button class="nav-btn" onclick="ioOpen('import')" title="导入存档">Import</button>
+    <button class="nav-btn" onclick="openKelivoImport()" title="导入 Kelivo 原始 JSON">Kelivo</button>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importAll(event)">
+    <input type="file" id="kelivoImportFile" accept=".json,application/json" style="display:none" onchange="kelivoImportFileChanged(event)">
     <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="切换主题">
       <svg id="drop-icon" viewBox="0 0 20 20" width="14" height="14" stroke="currentColor" stroke-width="1.5" fill="none">
         <path d="M10 2 C10 2 4 9.5 4 13a6 6 0 0 0 12 0C16 9.5 10 2 10 2z" id="drop-path"/>
@@ -7883,6 +7885,7 @@ i would like the room to be enough.
   <div id="cp-resize" title="拖动调整窗口大小（重新打开恢复默认）" aria-hidden="true"></div><!-- v17-sync -->
 </div>
 
+<script src="kelivo-import.js"></script>
 <script>
 const DB_NAME='InternalBeyondDB',DB_VER=15;let db;/* v15 — Internet Beyond：新增 feed（动态流），两端同轮 14→15 */
 /* v46 — 全站对象仓库清单：建库、重置、导入三处共用同一份，避免各自维护而漏项 */
@@ -8096,77 +8099,20 @@ const IBSyncClient = (function(){
     saveOutbox(outbox);
   }
 
-  async function push(cfg) {
-    const outbox = getOutbox();
-    if (!outbox.length) return { pushed: 0 };
-    
-    const batch = outbox.slice(0, 500);
-    const resp = await fetch(`${cfg.serverUrl}/push`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Sync-Token": cfg.token
-      },
-      body: JSON.stringify({
-        deviceId: getDeviceId(),
-        changes: batch
-      })
-    });
-
-    if (!resp.ok) {
-      throw new Error(`Push 失败 (${resp.status})`);
-    }
-
-    const data = await resp.json();
-    if (data.ok) {
-      const remain = outbox.slice(batch.length);
-      saveOutbox(remain);
-      return { pushed: batch.length, currentSeq: data.currentSeq };
-    }
-    throw new Error("Push 返回异常");
+  const STORAGE_KEY_REPUBLISH = "ib_cloud_sync_republish_stores";
+  function registerRepublish(records){
+    const stores=[];(records||[]).forEach(function(item){if(item&&SYNC_STORES.includes(item.store)&&item.record)stores.push(item.store)});
+    let old=[];try{old=JSON.parse(localStorage.getItem(STORAGE_KEY_REPUBLISH)||"[]")}catch(e){old=[]}
+    localStorage.setItem(STORAGE_KEY_REPUBLISH,JSON.stringify(stores.concat(old).filter((s,i,a)=>SYNC_STORES.includes(s)&&a.indexOf(s)===i)));
   }
-
-  async function pull(cfg) {
-    let sinceSeq = parseInt(localStorage.getItem(STORAGE_KEY_SEQ) || "0", 10);
-    const resp = await fetch(`${cfg.serverUrl}/pull?sinceSeq=${sinceSeq}&limit=1000&excludeDevice=${getDeviceId()}`, {
-      headers: {
-        "X-Sync-Token": cfg.token
-      }
-    });
-
-    if (!resp.ok) {
-      throw new Error(`Pull 失败 (${resp.status})`);
-    }
-
-    const data = await resp.json();
-    if (!data.ok) throw new Error("Pull 返回异常");
-
-    if (data.changes && data.changes.length > 0) {
-      _syncApplying = true;
-      try {
-        for (const ch of data.changes) {
-          if (!SYNC_STORES.includes(ch.store)) continue;
-          if (ch.op === "put" && ch.record) {
-            await dbPut(ch.store, ch.record);
-          } else if (ch.op === "delete") {
-            await dbDelete(ch.store, ch.recordId);
-          }
-        }
-      } finally {
-        _syncApplying = false;
-      }
-    }
-
-    if (data.currentSeq != null) {
-      localStorage.setItem(STORAGE_KEY_SEQ, String(data.currentSeq));
-    }
-
-    return {
-      pulled: data.changes ? data.changes.length : 0,
-      hasMore: data.hasMore,
-      currentSeq: data.currentSeq
-    };
+  async function flushRepublish(cfg){
+    let stores=[];try{stores=JSON.parse(localStorage.getItem(STORAGE_KEY_REPUBLISH)||"[]")}catch(e){stores=[]}let uploaded=0;
+    for(const store of stores.filter(s=>SYNC_STORES.includes(s))){const rows=await dbGetAll(store),batch=[];let bytes=0;const send=async()=>{if(!batch.length)return;const b=batch.splice(0);const r=await fetch(`${cfg.serverUrl}/push`,{method:'POST',headers:{'Content-Type':'application/json','X-Sync-Token':cfg.token},body:JSON.stringify({deviceId:getDeviceId(),changes:b})});if(!r.ok)throw new Error(`导入数据发布失败 (${r.status})`);const d=await r.json();if(!d.ok)throw new Error('导入数据发布被拒绝');const bad=(d.results||[]).filter(x=>x&&['stale','invalid','rejected'].includes(x.status));if(bad.length)throw new Error(`导入数据有 ${bad.length} 条未发布`);uploaded+=d.processed!=null?Number(d.processed):b.length};for(const row of rows){const key=row&&(row.id||row.name);if(!key)continue;const x={store,recordId:String(key),op:'put',record:row,updatedAt:Date.now(),deviceId:getDeviceId()},n=JSON.stringify(x).length;if(batch.length&&bytes+n>1800000)await send();batch.push(x);bytes+=n;if(batch.length>=100)await send()}await send()}
+    localStorage.removeItem(STORAGE_KEY_REPUBLISH);return uploaded;
   }
+  async function push(cfg){let pushed=0;for(let guard=0;guard<100;guard++){const outbox=getOutbox();if(!outbox.length)return{pushed};const batch=outbox.slice(0,500),resp=await fetch(`${cfg.serverUrl}/push`,{method:'POST',headers:{'Content-Type':'application/json','X-Sync-Token':cfg.token},body:JSON.stringify({deviceId:getDeviceId(),changes:batch})});if(!resp.ok)throw new Error(`Push 失败 (${resp.status})`);const data=await resp.json();if(!data.ok)throw new Error('Push 返回异常');const bad=(data.results||[]).filter(x=>x&&['stale','invalid','rejected'].includes(x.status));if(bad.length)throw new Error(`有 ${bad.length} 条同步记录被云端拒绝`);saveOutbox(outbox.slice(batch.length));pushed+=batch.length}throw new Error('待同步队列超过安全上限')}
+  async function pull(cfg,options){options=options||{};let sinceSeq=options.startSeq!=null?Number(options.startSeq):parseInt(localStorage.getItem(STORAGE_KEY_SEQ)||'0',10);if(!isFinite(sinceSeq)||sinceSeq<0)sinceSeq=0;let pulled=0,skipped=0,pages=0,hasMore=true,currentSeq=null;while(hasMore&&pages<1000){const resp=await fetch(`${cfg.serverUrl}/pull?sinceSeq=${encodeURIComponent(sinceSeq)}&limit=1000`,{headers:{'X-Sync-Token':cfg.token}});if(!resp.ok)throw new Error(`Pull 失败 (${resp.status})`);const data=await resp.json();if(!data.ok)throw new Error('Pull 返回异常');const changes=Array.isArray(data.changes)?data.changes:[];currentSeq=data.currentSeq!=null?data.currentSeq:currentSeq;_syncApplying=true;try{for(const ch of changes){if(!ch||!SYNC_STORES.includes(ch.store)){skipped++;continue}if(ch.op==='put'&&ch.record)await dbPut(ch.store,ch.record);else if(ch.op==='delete')await dbDelete(ch.store,ch.recordId);else skipped++}}finally{_syncApplying=false}pulled+=changes.length;const next=data.nextSinceSeq!=null?Number(data.nextSinceSeq):(changes.length?Number(changes[changes.length-1].serverSeq||sinceSeq):sinceSeq);hasMore=!!data.hasMore;if(hasMore&&(!isFinite(next)||next<=sinceSeq))throw new Error('Pull 分页游标未前进');sinceSeq=isFinite(next)?next:sinceSeq;if(isFinite(sinceSeq))localStorage.setItem(STORAGE_KEY_SEQ,String(sinceSeq));pages++}if(hasMore)throw new Error('Pull 分页超过安全上限');return{pulled,skipped,hasMore:false,currentSeq,pages}}
+
 
   async function syncNow(manual = false) {
     if (_isSyncing) return;
@@ -8176,7 +8122,9 @@ const IBSyncClient = (function(){
     _isSyncing = true;
     setStatus("正在与腾讯云同步数据…", "同步中…", "#e0a040");
     try {
+      const republished = await flushRepublish(cfg);
       const pushRes = await push(cfg);
+      pushRes.pushed = (pushRes.pushed || 0) + republished;
       const pullRes = await pull(cfg);
       
       const timeStr = new Date().toLocaleTimeString();
@@ -8370,6 +8318,7 @@ const IBSyncClient = (function(){
 
   return {
     recordChange,
+    registerRepublish,
     syncNow,
     uploadAllLocalData,
     downloadAllFromCloud,
@@ -9924,13 +9873,13 @@ async function _ioDoImport(){
   var data=JSON.parse(String(text||'').replace(/^\ufeff/,''));
   if(!data||typeof data!=='object')throw new Error('文件内容不是有效的存档结构');
   var list=IB_STORES.filter(function(x){return x!=='music'});
-  var counts={},skipped=[],i,name,arr,done=0;
+  var counts={},skipped=[],importedRows=[],i,name,arr,done=0;
   for(i=0;i<list.length;i++){
     name=list[i];arr=data[name];
     _ioStep('正在写入：'+(IO_STORE_CN[name]||name)+'（'+(i+1)+'/'+list.length+'）',15+Math.round(i/list.length*75));
     await _ioYield();
     if(!Array.isArray(arr)||!arr.length){counts[name]=0;continue}
-    try{await dbPutAll(name,arr);counts[name]=arr.length;done+=arr.length}
+    try{await dbPutAll(name,arr);counts[name]=arr.length;done+=arr.length;if(typeof IBSyncClient!=='undefined'&&IBSyncClient.registerRepublish&&['chatMessages','chatThreads','chatSummaries','memories','autoMemory','calEvents','calNotes','calLedger','posts','categories','letters'].indexOf(name)!==-1)arr.forEach(function(record){importedRows.push({store:name,record:record})})}
     catch(e){counts[name]=e.written||0;done+=counts[name];skipped.push((IO_STORE_CN[name]||name)+'（'+(e.message||'写入失败')+'）')}
   }
   _ioStep('正在刷新站内状态…',94);
@@ -9944,6 +9893,7 @@ async function _ioDoImport(){
   _calEarliest=null;
   try{await _ibMemOneLineRepairD()}catch(_e5){}
   try{if(window.IBCAL&&IBCAL.invalidate)await IBCAL.invalidate()}catch(e){}
+  try{if(importedRows.length&&typeof IBSyncClient!=='undefined'&&IBSyncClient.registerRepublish)IBSyncClient.registerRepublish(importedRows)}catch(syncErr){skipped.push('云同步登记（'+(syncErr.message||syncErr)+'）')}
   _ioStep('完成',100);
   var unknown=Object.keys(data).filter(function(k){return Array.isArray(data[k])&&list.indexOf(k)<0});
   var extra='';
@@ -10164,6 +10114,67 @@ function _ibGuardInit(){
   document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden'){if(_ibFsDirty&&_ibFsState==='granted')_ibFsSyncNow('hidden')/* 切后台即抢写一份，静默 */}});
   _ibRenderGuardPanel();
 }
+/* KELIVO RAW JSON IMPORT: parser is pure and fixture-testable; this flow owns preview, confirmation and persistence. */
+function openKelivoImport(){var inp=document.getElementById('kelivoImportFile');if(inp)inp.click()}
+async function _kelivoTargetConfig(){
+  var all=[];try{all=await dbGetAll('apiConfigs')}catch(e){}
+  var live=all.filter(function(c){return c&&!c.archived});
+  var active=live.find(function(c){return c.id===activeFriendId})||live[0]||null;
+  if(!active)return null;
+  if(live.length>1){
+    var currentIndex=Math.max(0,live.indexOf(active));
+    var labels=live.map(function(c,i){return(i+1)+'. '+(c.nickname||c.model||c.id)+(i===currentIndex?'（当前）':'')}).join('\n');
+    var answer=await ibPromptX('选择要绑定的 API 角色\n原始导入只会写入该角色的聊天与记忆。输入序号，默认当前角色 / 第一项。',String(currentIndex+1),{placeholder:labels});
+    if(answer===null)return false;
+    var n=parseInt(answer,10);if(isFinite(n)&&live[n-1])active=live[n-1];
+  }
+  return active;
+}
+function _kelivoPreviewText(parsed,cfg,file){
+  var c=parsed.counts;
+  return 'Kelivo 原始 JSON 导入预览\n文件：'+(file&&file.name||'JSON')+'\n绑定角色：'+(cfg.nickname||cfg.model||cfg.id)+'\n\n将导入：'+c.messages+' 条消息、'+c.threads+' 个话题、'+c.memories+' 条记忆。\n仅接受 user / assistant 角色；system、tool、未知角色与敏感字段会跳过。相同来源键会合并，重复导入不会创建副本。';
+}
+async function _kelivoExistingKeys(store){var rows=[];try{rows=await dbGetAll(store)}catch(e){}var keys={};rows.forEach(function(r){var k=r&&(r._kelivoSourceKey||r.sourceKey);if(k)keys[k]=true});return keys}
+async function _kelivoWriteNew(store,rows){
+  var existing=await _kelivoExistingKeys(store),written=0;
+  for(var i=0;i<rows.length;i++){var row=rows[i],k=row&&(row._kelivoSourceKey||row.sourceKey);if(!row||!k||existing[k])continue;await dbPut(store,row);existing[k]=true;written++}
+  return written;
+}
+async function _kelivoRefreshAfterImport(){
+  _ibToolsCache=null;_calEarliest=null;
+  try{await loadApiConfigs()}catch(e){}try{_refreshCachedUserName()}catch(e){}
+  try{await _ibMemOneLineRepairD()}catch(e){}try{if(window.IBCAL&&IBCAL.invalidate)await IBCAL.invalidate()}catch(e){}
+  try{if(typeof renderMemories==='function')await renderMemories()}catch(e){}try{if(typeof updateMemDashboard==='function')await updateMemDashboard()}catch(e){}
+  try{if(typeof updateChatCount==='function')await updateChatCount()}catch(e){}try{if(typeof updateChatStorageInfo==='function')await updateChatStorageInfo()}catch(e){}
+}
+async function _kelivoRepublish(records){
+  try{localStorage.setItem('ib_kelivo_republish_pending',JSON.stringify({at:Date.now(),stores:Object.keys(records||{})}))}catch(e){}
+  try{if(typeof IBSyncClient!=='undefined'&&IBSyncClient.registerRepublish){var all=[];Object.keys(records||{}).forEach(function(store){(records[store]||[]).forEach(function(record){all.push({store:store,record:record})})});IBSyncClient.registerRepublish(all)}}catch(e){console.warn('[Kelivo import] republish registration failed',e)}
+  try{if(window.IBRepublish&&typeof window.IBRepublish.markImported==='function')await window.IBRepublish.markImported(records)}catch(e){console.warn('[Kelivo import] republish hook failed',e)}
+  try{if(typeof IBSyncClient!=='undefined'&&IBSyncClient.syncNow)await IBSyncClient.syncNow(true)}catch(e){console.warn('[Kelivo import] sync publish failed',e)}
+}
+async function kelivoImportFileChanged(e){
+  var file=e&&e.target&&e.target.files&&e.target.files[0];if(!file)return;
+  try{
+    if(!window.IBKelivoImport)throw new Error('Kelivo 导入模块未加载');
+    var text=await file.text(),data=JSON.parse(String(text||'').replace(/^\ufeff/,''));
+    var cfg=await _kelivoTargetConfig();if(cfg===false)return;
+    if(!cfg){alert('请先在 API 页面添加至少一个 API 角色，再导入历史聊天。');return}
+    var parsed=window.IBKelivoImport.parse(data,{source:'kelivo-json-v1',friendId:cfg.id,friendName:cfg.nickname||cfg.model||'AI'});
+    if(!parsed.counts.messages&&!parsed.counts.memories)throw new Error('未识别到 Kelivo / ChatGPT 消息或记忆；不会写入任何数据');
+    if(!await ibConfirmX(_kelivoPreviewText(parsed,cfg,file),'确认导入'))return;
+    var counts={threads:0,messages:0,memories:0};
+    counts.threads=await _kelivoWriteNew('chatThreads',parsed.threads);
+    counts.messages=await _kelivoWriteNew('chatMessages',parsed.messages);
+    counts.memories=await _kelivoWriteNew('memories',parsed.memories);
+    await _kelivoRefreshAfterImport();
+    await _kelivoRepublish({chatThreads:parsed.threads,chatMessages:parsed.messages,memories:parsed.memories});
+    toast('Kelivo 导入完成：新增 '+counts.messages+' 条消息、'+counts.threads+' 个话题、'+counts.memories+' 条记忆');
+    try{navTo(currentPage)}catch(e2){}
+  }catch(err){console.error('[Kelivo import]',err);alert('Kelivo 导入未完成：'+String(err&&err.message||err))}
+  finally{e.target.value=''}
+}
+
 async function importAll(e){const file=e.target.files[0];if(!file)return;try{const text=await file.text();const data=JSON.parse(text);for(const _s of IB_STORES){if(_s==='music')continue;if(Array.isArray(data[_s])&&data[_s].length){await dbPutAll(_s,data[_s])}}await migrateLockedPosts();try{localStorage.removeItem('ib_guardMuted')}catch(e2){}var _go=document.getElementById('ib-guard-overlay');if(_go){_go.remove();_ibGuardShown=false}_ibToolsCache=null;/* 导入可能带来新的外部工具配置，使缓存失效 */await loadApiConfigs();_refreshCachedUserName();_calEarliest=null;/* 同步刷新内存缓存：API 配置、用户名头像、日历最早日期 */try{if(window.IBCAL&&IBCAL.invalidate)await IBCAL.invalidate()}catch(_e3){}/* fix-r7：同 _ioDoImport，老入口一并重建日历缓存 */try{await _ibMemOneLineRepairD()}catch(_e4){}toast('数据已导入');navTo(currentPage)}catch(err){toast('导入未完成：'+(err&&err.message||'文件格式错误'))}e.target.value=''}
 function esc(s){if(!s)return'';const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 
