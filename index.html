@@ -29184,14 +29184,18 @@ function fmtDur(s){return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2)}
 function _callEffMerge(cs,fid){
   cs=cs||{};
   var p=fid&&cs.perApi&&cs.perApi[fid];
-  var base=(!p||!p.use)?Object.assign({},cs):Object.assign({},cs,{tts:(p.tts==='cloud'||p.tts==='off')?p.tts:'sys',sysVoice:String(p.sysVoice||''),provider:/^(el|mm|az|ali)$/.test(p.provider)?p.provider:'oai',ep:String(p.ep||''),key:String(p.key||''),gid:String(p.gid||''),model:String(p.model||''),voice:String(p.voice||''),rate:Math.max(0.5,Math.min(2,parseFloat(p.rate)||1)),lang:(p.lang&&{en:1,ja:1,ko:1}[p.lang])?p.lang:'',vol:(p.vol!=null&&p.vol!=='')?p.vol:cs.vol});
+  var base=(!p||!p.use)?Object.assign({},cs):Object.assign({},cs,{tts:(p.tts==='cloud'||p.tts==='off')?p.tts:'sys',sysVoice:String(p.sysVoice||''),provider:/^(el|mm|az|ali|doubao)$/.test(p.provider)?p.provider:'oai',ep:String(p.ep||''),key:String(p.key||''),appkey:String(p.appkey||''),gid:String(p.gid||''),model:String(p.model||''),voice:String(p.voice||''),rate:Math.max(0.5,Math.min(2,parseFloat(p.rate)||1)),lang:(p.lang&&{en:1,ja:1,ko:1}[p.lang])?p.lang:'',vol:(p.vol!=null&&p.vol!=='')?p.vol:cs.vol});
   base.vol=Math.max(0.1,Math.min(1,parseFloat(base.vol)||1));
   base.vbOn=!!(p&&p.vbOn);
   base.vbLang=(p&&p.vbLang&&{en:1,ja:1,ko:1}[p.vbLang])?p.vbLang:'';
   return base;
 }
+function _ibcDoubaoSpeechText(s){
+  return String(s||'').replace(/[（(][^（）()\r\n]{1,40}[）)]/g,' ').replace(/\s+/g,' ').trim();
+}
 async function cloudFetchTTS(s,cs,signal){
   const prov=(cs&&cs.provider)||'oai';
+  if(prov==='doubao')s=_ibcDoubaoSpeechText(s);
   let res;
   if(prov==='el'){
     if(!cs.key)throw new Error('未配置 ElevenLabs Key');
@@ -29218,6 +29222,25 @@ async function cloudFetchTTS(s,cs,signal){
     const escX=function(x){return String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')};
     const ssml='<speak version="1.0" xml:lang="'+lgA+'"><voice name="'+escX(voA)+'"><prosody rate="'+Math.round((rrA-1)*100)+'%">'+escX(s)+'</prosody></voice></speak>';
     res=await fetch(base,{method:'POST',headers:{'Ocp-Apim-Subscription-Key':cs.key,'Content-Type':'application/ssml+xml','X-Microsoft-OutputFormat':'audio-24khz-48kbitrate-mono-mp3'},body:ssml,signal:signal});
+  }else if(prov==='doubao'){
+    const kd9=String(cs.key||'').trim();
+    if(!kd9)throw new Error('未配置豆包 API Key');
+    if(!cs.voice)throw new Error('豆包需在「音色」填 speaker_id');
+    let baseD=String(cs.ep||'').trim().replace(/\/+$/,'')||'https://openspeech.bytedance.com/api/v3/tts';
+    const urlD=/\/api\/v3\/tts$/i.test(baseD)?baseD:baseD+'/api/v3/tts';
+    const rrD=Math.max(0.5,Math.min(2,parseFloat(cs.rate)||1));
+    const bodyD={speaker_id:cs.voice,req_params:{text:s,audio_params:{format:'mp3',sample_rate:24000,speech_rate:Math.round((rrD-1)*100)}}};
+    const reqIdD='ib'+Date.now()+'_'+Math.floor(Math.random()*1e6);
+    const hdrD={'X-Api-Key':kd9,'X-Api-Request-Id':reqIdD,'Content-Type':'application/json'};
+    let jD=null;
+    try{res=await fetch(urlD,{method:'POST',headers:hdrD,body:JSON.stringify(bodyD),signal:signal});if(!res.ok)throw new Error('HTTP '+res.status);jD=await res.json()}
+    catch(eD9){const C9=window.Capacitor,H9=(C9&&C9.isNativePlatform&&C9.isNativePlatform())?(C9.Plugins&&C9.Plugins.CapacitorHttp):null;
+      if(!H9||typeof H9.request!=='function')throw eD9;
+      const n9=await H9.request({url:urlD,method:'POST',headers:hdrD,data:bodyD,connectTimeout:22000,readTimeout:22000});
+      jD=(typeof n9.data==='string')?JSON.parse(n9.data):n9.data}
+    if(!jD||jD.code!==3000||!jD.data)throw new Error('豆包 TTS：'+String((jD&&(jD.message||jD.code))||'返回异常').slice(0,60));
+    const bs9=atob(String(jD.data)),u89=new Uint8Array(bs9.length);for(let i9=0;i9<bs9.length;i9++)u89[i9]=bs9.charCodeAt(i9);
+    return u89.buffer;
   }else if(prov==='ali'){
     if(!cs.key)throw new Error('未配置阿里云 DashScope Key');
     let base=String(cs.ep||'').trim().replace(/\/+$/,'')||'https://dashscope.aliyuncs.com';
@@ -29506,7 +29529,7 @@ var IC={min:'<svg viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg>',up:'<svg v
  micOff:'<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M4 4l16 16"/></svg>',
  stop:'<svg viewBox="0 0 24 24"><rect x="6.8" y="6.8" width="10.4" height="10.4" rx="2"/></svg>'};
 var TTS_OPTS=[['sys','系统语音（本机）'],['cloud','云端音色'],['off','仅字幕（不发声）']],
- PROV_OPTS=[['oai','OpenAI 兼容接口'],['el','ElevenLabs'],['mm','MiniMax'],['az','Azure 语音 (Microsoft)'],['ali','Qwen-TTS (阿里云)']],
+ PROV_OPTS=[['oai','OpenAI 兼容接口'],['el','ElevenLabs'],['mm','MiniMax'],['az','Azure 语音 (Microsoft)'],['ali','Qwen-TTS (阿里云)'],['doubao','豆包（火山引擎语音）']],
  LANG_OPTS=[['','中文'],['en','English'],['ja','日本語'],['ko','한국어']],
  RATE_OPTS=[['0.85','0.85×'],['1','1×'],['1.1','1.1×'],['1.25','1.25×'],['1.5','1.5×']],
  VOL_OPTS=[['1','100%'],['0.8','80%'],['0.6','60%'],['0.4','40%']];
@@ -29532,9 +29555,9 @@ function voiceEd(host,get,set,opt){opt=opt||{};var o=get()||{};
  var sT=selEl(TTS_OPTS,(o.tts==='cloud'||o.tts==='off')?o.tts:'sys');host.appendChild(fgEl('声音',sT));
  var gS=fgEl('系统音色',selEl(sysVoiceOpts(),o.sysVoice||''));host.appendChild(gS);
  var gC=document.createElement('div');host.appendChild(gC);
- var sP=selEl(PROV_OPTS,/^(el|mm|az|ali)$/.test(o.provider)?o.provider:'oai');gC.appendChild(fgEl('服务商',sP));
+ var sP=selEl(PROV_OPTS,/^(el|mm|az|ali|doubao)$/.test(o.provider)?o.provider:'oai');gC.appendChild(fgEl('服务商',sP));
  var iE=inpEl('留空使用官方地址；OpenAI 兼容与 Azure 必填',o.ep);gC.appendChild(fgEl('Endpoint',iE));
- var iK=inpEl('sk-…',o.key,'password');gC.appendChild(fgEl('API Key',iK));
+ var iK=inpEl('新版控制台 API Key',o.key,'password');gC.appendChild(fgEl('API Key',iK));
  var iG=inpEl('账号信息页的 GroupId',o.gid),gG=fgEl('GroupId（MiniMax 必填）',iG);gC.appendChild(gG);
  var iM=inpEl('留空使用默认模型',o.model);gC.appendChild(fgEl('模型',iM));
  var iV=inpEl('CosyVoice2 填 模型:音色；ElevenLabs 填 voice_id',o.voice);gC.appendChild(fgEl('音色（voice）',iV));
