@@ -29226,12 +29226,13 @@ async function cloudFetchTTS(s,cs,signal){
     const kd9=String(cs.key||'').trim();
     if(!kd9)throw new Error('未配置豆包 API Key');
     if(!cs.voice)throw new Error('豆包需在「音色」填 speaker_id');
-    let baseD=String(cs.ep||'').trim().replace(/\/+$/,'')||'https://openspeech.bytedance.com/api/v3/tts';
+    let baseD=String(cs.ep||'').trim().replace(/\/+$/,'')||'https://openspeech.bytedance.com/api/v3/tts/unidirectional';
     const urlD=/\/api\/v3\/tts$/i.test(baseD)?baseD:baseD+'/api/v3/tts';
     const rrD=Math.max(0.5,Math.min(2,parseFloat(cs.rate)||1));
     const bodyD={speaker_id:cs.voice,req_params:{text:s,audio_params:{format:'mp3',sample_rate:24000,speech_rate:Math.round((rrD-1)*100)}}};
     const reqIdD='ib'+Date.now()+'_'+Math.floor(Math.random()*1e6);
-    const hdrD={'X-Api-Key':kd9,'X-Api-Request-Id':reqIdD,'Content-Type':'application/json'};
+    const hdrD={'X-Api-Key':kd9,'X-Api-Resource-Id':'volc.megatts.voiceclone',
+    'X-Api-Request-Id':reqIdD,'Content-Type':'application/json'};
     let jD=null;
     try{res=await fetch(urlD,{method:'POST',headers:hdrD,body:JSON.stringify(bodyD),signal:signal});if(!res.ok)throw new Error('HTTP '+res.status);jD=await res.json()}
     catch(eD9){const C9=window.Capacitor,H9=(C9&&C9.isNativePlatform&&C9.isNativePlatform())?(C9.Plugins&&C9.Plugins.CapacitorHttp):null;
@@ -29557,10 +29558,10 @@ function voiceEd(host,get,set,opt){opt=opt||{};var o=get()||{};
  var gC=document.createElement('div');host.appendChild(gC);
  var sP=selEl(PROV_OPTS,/^(el|mm|az|ali|doubao)$/.test(o.provider)?o.provider:'oai');gC.appendChild(fgEl('服务商',sP));
  var iE=inpEl('留空使用官方地址；OpenAI 兼容与 Azure 必填',o.ep);gC.appendChild(fgEl('Endpoint',iE));
- var iK=inpEl('新版控制台 API Key',o.key,'password');gC.appendChild(fgEl('API Key',iK));
+ var iK=inpEl('新版控制台 API Key',o.key||'63ea197a-e700-4f82-b724-15614b750498','password');gC.appendChild(fgEl('API Key',iK));
  var iG=inpEl('账号信息页的 GroupId',o.gid),gG=fgEl('GroupId（MiniMax 必填）',iG);gC.appendChild(gG);
  var iM=inpEl('留空使用默认模型',o.model);gC.appendChild(fgEl('模型',iM));
- var iV=inpEl('CosyVoice2 填 模型:音色；ElevenLabs 填 voice_id',o.voice);gC.appendChild(fgEl('音色（voice）',iV));
+ var iV=inpEl('CosyVoice2 填 模型:音色；ElevenLabs 填 voice_id',o.voice||'S_D7jejZ8f2');gC.appendChild(fgEl('音色（voice）',iV));
  var row=null,sL=null,sR=null,sV=null;
  if(opt.lang||opt.rate||opt.vol){row=document.createElement('div');row.className='cw-frow';
   if(opt.lang){sL=selEl(LANG_OPTS,o.lang||'');row.appendChild(fgEl('朗读语言',sL))}
