@@ -11298,15 +11298,33 @@ async function loadApiSettingsUI(){_apiArchView=false;_apiArchToggleUI();renderA
 }
 
 /* FRIENDS LIST */
+/* 获取会话最新一条消息时间戳，用于按时间倒序排在最前 */
+async function _getLatestChatTs(fid, fallbackCreated){
+  let lastTs = fallbackCreated || 0;
+  try {
+    const ms = await dbGetByIndex('chatMessages', 'byFriend', fid);
+    if (ms && ms.length) {
+      for (let j = 0; j < ms.length; j++) {
+        const t = ms[j].timestamp || ms[j].created || 0;
+        if (t > lastTs) lastTs = t;
+      }
+    }
+  } catch(e) {}
+  return lastTs;
+}
 async function loadFriendsList(){
   if(_chatArchMode)return renderArchFriendsList();
   await loadApiConfigs();
   const c=document.getElementById('friends-list');
   if(!apiConfigs.length){c.innerHTML='<div style="font-size:0.72rem;color:var(--text-muted);padding:8px">去 API 页面添加API</div>';return}
   const allThreads=await (async()=>{try{return await dbGetAll('chatThreads')}catch(e){return[]}})();
+  /* 按照最新消息时间倒序排序，最新的对话排在最前面 */
+  const sortedApiConfigs = (await Promise.all(apiConfigs.map(async a => {
+    return { a, ts: await _getLatestChatTs(a.id, a.created) };
+  }))).sort((x, y) => y.ts - x.ts).map(x => x.a);
   let html='';
-  for(const a of apiConfigs){
-    const threads=allThreads.filter(t=>t.friendId===a.id).sort((x,y)=>x.created-y.created);
+  for(const a of sortedApiConfigs){
+    const threads=allThreads.filter(t=>t.friendId===a.id).sort((x,y)=>(y.updated||y.created||0)-(x.updated||x.created||0));
     const isActive=activeFriendId===a.id&&!activeThreadId;
     const isExpanded=activeFriendId===a.id;
     const badge=threads.length?'<span class="friend-thread-badge">('+threads.length+')</span>':'';
@@ -11334,7 +11352,10 @@ async function loadFriendsList(){
   if(!groups.length){
     gc.innerHTML='<div style="font-size:0.75rem;padding:4px" class="chat-sidebar-muted">暂无群聊</div>';
   }else{
-    gc.innerHTML=groups.map(g=>{
+    const sortedGroups = (await Promise.all(groups.map(async g => {
+      return { g, ts: await _getLatestChatTs(g.id, g.created) };
+    }))).sort((x, y) => y.ts - x.ts).map(x => x.g);
+    gc.innerHTML=sortedGroups.map(g=>{
       const memberNames=g.members.map(mid=>{const cfg=apiConfigs.find(a=>a.id===mid);return cfg?esc(cfg.nickname||cfg.model):'?'});
       const tags=memberNames.map(n=>'<span class="group-member-tag">'+n+'</span>').join('');
       return '<div class="friend-item'+(activeFriendId===g.id?' active':'')+'" onclick="selectGroup(\''+g.id+'\')"><span class="friend-dot" style="background:#72a8d8"></span><span>'+esc(g.name)+'</span><span class="del-btn" onclick="event.stopPropagation();deleteGroup(\''+g.id+'\')" title="删除群聊" style="margin-left:auto;font-size:0.7rem;cursor:pointer;opacity:0.5">✕</span></div>';
@@ -25632,8 +25653,12 @@ async function renderChatPanelFriends(){
   if(!c)return;
   if(!apiConfigs.length){c.innerHTML='<div class="cpf-item" style="opacity:0.5;cursor:default;font-size:0.65rem">去API页面添加</div>';return}
   const allThreads=await (async()=>{try{return await dbGetAll('chatThreads')}catch(e){return[]}})();
+  /* 按照最新消息时间倒序排序，最新的对话排在最前面 */
+  const sortedApiConfigs = (await Promise.all(apiConfigs.map(async a => {
+    return { a, ts: await _getLatestChatTs(a.id, a.created) };
+  }))).sort((x, y) => y.ts - x.ts).map(x => x.a);
   let html='';
-  apiConfigs.forEach(a=>{
+  sortedApiConfigs.forEach(a=>{
     const isMainActive=activeFriendId===a.id&&!activeThreadId;
     html+='<div class="cpf-item'+(isMainActive?' active':'')+'" onclick="selectPanelFriend(\''+a.id+'\')">'+esc(a.nickname||a.model||'AI')+'</div>';
     const threads=allThreads.filter(t=>t.friendId===a.id);
@@ -25646,7 +25671,10 @@ async function renderChatPanelFriends(){
   });
   const groups=await loadGroups();
   if(groups.length){
-    html+=groups.map(g=>'<div class="cpf-item'+(activeFriendId===g.id?' active':'')+'" onclick="selectPanelGroup(\''+g.id+'\')" style="border-color:rgba(114,168,216,0.4)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px;opacity:0.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'+esc(g.name)+'</div>').join('');
+    const sortedGroups = (await Promise.all(groups.map(async g => {
+      return { g, ts: await _getLatestChatTs(g.id, g.created) };
+    }))).sort((x, y) => y.ts - x.ts).map(x => x.g);
+    html+=sortedGroups.map(g=>'<div class="cpf-item'+(activeFriendId===g.id?' active':'')+'" onclick="selectPanelGroup(\''+g.id+'\')" style="border-color:rgba(114,168,216,0.4)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px;opacity:0.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'+esc(g.name)+'</div>').join('');
   }
   c.innerHTML=html;
 }
