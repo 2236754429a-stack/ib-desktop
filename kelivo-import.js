@@ -17,8 +17,8 @@
   function first(o,keys){for(var i=0;i<keys.length;i++){if(o&&o[keys[i]]!=null&&o[keys[i]]!=='')return o[keys[i]]}return ''}
   function finiteTime(v){
     if(v instanceof Date)return v.getTime();
-    if(typeof v==='number'&&isFinite(v))return v<100000000000?v*1000:v;
-    if(typeof v==='string'&&v.trim()){var n=Number(v);if(isFinite(n))return n<100000000000?n*1000:n;var d=Date.parse(v);if(isFinite(d))return d}
+    if(typeof v==='number'&&isFinite(v))return v<100000000000?v*1000:(v>100000000000000?Math.round(v/1000):v);/* µs(>1e14)误入会被当 ms 解析成公元 5 万年 */
+    if(typeof v==='string'&&v.trim()){var n=Number(v);if(isFinite(n))return n<100000000000?n*1000:(n>100000000000000?Math.round(n/1000):n);var d=Date.parse(v);if(isFinite(d))return d}
     return 0;
   }
   function hash(s){
