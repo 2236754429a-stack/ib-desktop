@@ -1,4 +1,5 @@
 /* Internal Beyond · 观影室（桌面端外置 DLC）2.6.3 —— 文件名 IB-Cinema.js
+   net.12：散场记忆——「离开放映·保存并退出」时可勾选让 TA 把这次观影写成一条记忆（TA 本人执笔走主链路 callApi；存 memories，可见范围=仅 TA；进度与对话随附；档案记录 memSavedAt/memCount 防重）。
    2.6.3：「最近在看」银幕右上角新增小删除圆钮（垃圾桶、玻璃圆底，确认后走 delRec——记录、档案、字幕缓存与「观影室 · 片名」频道一并删除）；原左下角「删除记录」文字键随之撤下（待放映态的「取消」不动，海报墙每张卡的 × 不动）。
    2.6.2：①「离开放映」删去「本次 X 分钟 · 看到 X:XX · 胶片…」统计行——这些都会写进观影档案，弹窗里只留问题与三键；随手拆掉只为这行算的四个临时变量。②说明文字加深加重：原 0.86rem、八成透明度压在放映画面上发灰，改 0.88rem、字重 450、明暗各给实色（明 #22406e / 暗 rgba(228,238,252,0.94)），h3 副题透明度 .55 → .68，标题与说明间距 6 → 12px，三键字重 500。
    2.6.1：离开放映确认框对齐主文件 API 页归档区的对话框——遮罩用主文件 .group-dialog-overlay（同一档 12px 模糊与暗度），面板用 .group-dialog（实色、16px 圆角、无 backdrop-filter、无 transform），自有样式只留宽度与排版。
@@ -579,18 +580,47 @@ async function wrapUp(){if(!S.rec||S.wrapBusy)return;if(!S.subs.length){ctx.ui.t
 /* ── 离开放映：三键（保存并退出 / 不记这次 / 取消） ── */
 function askExit(){if(S.view!=='play'){renderLib();return}if($('ci-exit-ov'))return;/* 2.6.2：统计行连同只为它算的 v / t / mins / n 一并撤（exit() 自己重算这些数并写进档案） */
   var ov=document.createElement('div');ov.id='ci-exit-ov';ov.className='group-dialog-overlay show';ov.style.zIndex='9990';/* 2.5.0：不借主文件任何类——模块自己的遮罩与面板，flex 居中、无 transform / filter，字不会糊 */
-  ov.innerHTML='<div class="group-dialog ci-exit-dlg" role="dialog"><h3>离开放映<i>Leave</i></h3><p class="s">保存＝这一次记进观影档案（时间、TA、看了多久、看到哪、记了几笔），胶片与提要留着；不记＝这一次不进档案，本次新记的胶片不留，提要回到进门时，纸条仍留在频道里。下次仍从头放。</p><div class="b"><button type="button" data-v="c">取消</button><button type="button" data-v="d">不记这次</button><button type="button" class="on" data-v="s">保存并退出</button></div></div>';
-  (document.fullscreenElement||document.body).appendChild(ov);ov.querySelectorAll('button').forEach(function(b){b.addEventListener('click',function(){var val=b.dataset.v;ov.remove();if(val==='s'||val==='d')exit(val==='d')})});ov.addEventListener('click',function(e){if(e.target===ov)ov.remove()})}
-async function exit(discard){if(S.view!=='play'||!S.rec)return;var r=S.rec;var v=video();var t=v?(v.currentTime||0):0;var mins=Math.max(1,Math.round((Date.now()-S.enteredAt)/60000));var name=taName(r.cfgId);
+  ov.innerHTML='<div class="group-dialog ci-exit-dlg" role="dialog"><h3>离开放映<i>Leave</i></h3><p class="s">保存＝这一次记进观影档案（时间、TA、看了多久、看到哪、记了几笔），胶片与提要留着；不记＝这一次不进档案，本次新记的胶片不留，提要回到进门时，纸条仍留在频道里。下次仍从头放。</p><label style="display:flex;gap:8px;align-items:flex-start;margin:10px 0 2px;font-size:.86rem;line-height:1.6;cursor:pointer"><input type="checkbox" id="ci-mem-ck" style="margin-top:3px;accent-color:#2f6fed"><span>散场后让 TA 把这次观影写成一条记忆<i style="opacity:.6;font-style:normal">（TA 本人执笔，只有 TA 自己可见）</i></span></label><div class="b"><button type="button" data-v="c">取消</button><button type="button" data-v="d">不记这次</button><button type="button" class="on" data-v="s">保存并退出</button></div></div>';
+  (document.fullscreenElement||document.body).appendChild(ov);var _memCk=ov.querySelector('#ci-mem-ck');try{_memCk.checked=localStorage.getItem('ib-cinema-mem-exit')==='1'}catch(e){}if(_memCk)_memCk.addEventListener('change',function(){try{localStorage.setItem('ib-cinema-mem-exit',_memCk.checked?'1':'0')}catch(e){}});ov.querySelectorAll('button').forEach(function(b){b.addEventListener('click',function(){var val=b.dataset.v;var mo=!!(_memCk&&_memCk.checked);ov.remove();if(val==='s'||val==='d')exit(val==='d',mo)})});ov.addEventListener('click',function(e){if(e.target===ov)ov.remove()})}
+async function exit(discard,memOn){if(S.view!=='play'||!S.rec)return;var r=S.rec;var v=video();var t=v?(v.currentTime||0):0;var mins=Math.max(1,Math.round((Date.now()-S.enteredAt)/60000));var name=taName(r.cfgId);
   if(discard){r.notes=(r.notes||[]).filter(function(x){return !((x.ts||0)>=S.enteredAt)});r.done=S.done0;S.sum=S.sum0;try{if(S.sum)await ctx.storage.set(K.sum+r.key,S.sum);else await ctx.storage.remove(K.sum+r.key)}catch(e){}}
   else{r.sessions=(r.sessions||0)+1;r.totalMs=(r.totalMs||0)+Math.max(0,Date.now()-Math.max(S.enteredAt,S.totalMark||0));r.lastTs=Date.now();r.lastT=t;
     try{await writeLog(r.key,{ts:S.enteredAt,end:Date.now(),key:r.key,title:r.title,cfgId:r.cfgId,name:name,mins:mins,t:t,dur:r.dur||0,n:Math.max(0,(r.notes||[]).length-S.notes0),done:!!r.done,sum:S.sum&&S.sum.text?String(S.sum.text).slice(0,300):''})}catch(e){}}
-  await recSave();leaveToLib();ctx.ui.toast(discard?'已离开放映（本次无记录）':'已离开放映')}
+  await recSave();var _memSnap=null;if(!discard&&memOn&&S.thread&&S.thread.id)_memSnap={key:r.key,title:r.title,cfgId:r.cfgId,thread:S.thread.id,t:t,mins:mins,dur:r.dur||0};leaveToLib();ctx.ui.toast(discard?'已离开放映（本次无记录）':'已离开放映');if(_memSnap)saveFilmMemory(_memSnap)}
 function restoreSel(){try{var pv=S.prevSel;S.prevSel=null;var cur=ctx.chat.current();var sid=S.thread&&S.thread.id;if(!(cur&&cur.threadId&&cur.threadId===sid))return;if(pv&&pv.friendId&&!(pv.friendId===S.cfgId&&pv.threadId===sid)){if(pv.threadId)ctx.chat.select(pv.friendId,pv.threadId);else if(typeof selectFriend==='function')selectFriend(pv.friendId)}else if(typeof selectFriend==='function')selectFriend(cur.friendId)}catch(e){}}
 function leaveToLib(){closeMem();var v=video();if(v){try{v.pause()}catch(e){}}if(document.fullscreenElement){try{document.exitFullscreen()}catch(e){}}
   ctx.sys.clear();closePop();if(S.docKey){document.removeEventListener('keydown',S.docKey);S.docKey=null}clearInterval(S.statT);S.statT=null;clearTimeout(S.uiT);clearTimeout(S.refT);S.inQ=[];if(S.ro){try{S.ro.disconnect()}catch(e){}S.ro=null}if(S.col){S.col.remove();S.col=null}S.list=null;
   hlsStop();/* [net] */if(v){v.removeAttribute('src');try{v.load()}catch(e){}}if(S.url){try{URL.revokeObjectURL(S.url)}catch(e){}S.url=null}S.file=null;S.playNet=null;S.rec=null;S.subs=[];S.keep=null;S.sum=null;S.sum0=null;S.wrapBusy=false;S.sumBusy=false;
   document.removeEventListener('fullscreenchange',onFs);var ov=$('ci-exit-ov');if(ov)ov.remove();restoreSel();S.thread=null;renderLib()}
+
+
+/* ── 散场记忆（net.12）：TA 本人执笔，把这次观影写成一条记忆（同通话 Save memory 的记录格式） ── */
+async function saveFilmMemory(snap){
+  var T=function(m){try{ctx.ui.toast(m)}catch(e){}};
+  try{
+    var c=null;try{c=(window.apiConfigs||[]).find(function(x){return x.id===snap.cfgId})}catch(e){}
+    if(!c||!c.apiKey||!c.endpoint)throw new Error('找不到这位 TA 的可用 API');
+    var msgs=await dbGetByIndex('chatMessages','byFriend',snap.cfgId);
+    msgs=msgs.filter(function(m){return m&&m.threadId===snap.thread}).sort(function(a,b){return (a.timestamp||a.created||0)-(b.timestamp||b.created||0)});
+    if(!msgs.length)throw new Error('这次没有聊到什么，不写记忆');
+    var ab=null;try{ab=await dbGet('about','main')}catch(e){}
+    var uN=(ab&&ab.name)||'用户',aN=taName(snap.cfgId)||'TA';
+    var body=msgs.slice(-40).map(function(m){var t=String(m.content||'').replace(/<ws_[a-z_]+\b[^>]*\/?>/gi,'').replace(/\s+/g,' ').trim();if(!t)return '';t=t.length>400?t.slice(0,400)+'…':t;return (m.role==='user'?uN:aN)+'：'+t}).filter(Boolean).join('\n').slice(-8000);
+    if(!body)throw new Error('这次没有聊到什么，不写记忆');
+    var dt=new Date(),ds=dt.getFullYear()+'年'+(dt.getMonth()+1)+'月'+dt.getDate()+'日';
+    var prog=snap.dur?('约第 '+Math.max(1,Math.round(snap.t/60))+' 分钟（共 '+Math.round(snap.dur/60)+' 分钟，约 '+Math.round(100*Math.min(1,snap.t/snap.dur))+'%）'):('约第 '+Math.max(1,Math.round(snap.t/60))+' 分钟');
+    var prompt='你是'+aN+'，刚刚和'+uN+'一起看了一会《'+snap.title+'》。下面是这次观影频道的完整对话（未删节）。\n以第一人称把这次一起观影写成一条记忆：\n怎么开始的、看到哪里、聊了什么——提到的情节、约定、'+uN+'的状态和在意的事记准。\n'+uN+'的语气和让你在意的瞬间写一句，落在具体的台词或画面上，不做抽象升华。\n轻松的观影写得轻松，要紧的事记得认真。\n只写真实出现的内容，不推测、不补写。用名字称呼，不用含混的代词开头。\n120～280字，单段成文，先事实后感受。\n只输出记忆正文本身，不要标题、不要解释、不要引号。\n\n【观影信息】'+ds+' · 一起看了约 '+snap.mins+' 分钟 · 看到约 '+prog+'\n【完整对话】\n'+body;
+    var txt=(typeof _cleanGen==='function'?_cleanGen(await callApi(Object.assign({},c,{systemPrompt:''}),prompt)):String(await callApi(Object.assign({},c,{systemPrompt:''}),prompt)).trim());
+    if(!txt)throw new Error('生成为空');
+    var sm=(txt.match(/^[^。！？!?\n]*[。！？!?]?/)||[''])[0]||txt;sm=sm.length>60?sm.slice(0,60)+'…':sm;
+    var data={title:'观影记忆 · '+aN+' · 《'+short(snap.title,18)+'》',summary:sm,content:txt.slice(0,3000),source:'观影室',sourceId:snap.key,domain:'日常',tags:['观影室'],valence:0.5,arousal:0.3,importance:6,resolved:false,visibility:'only',visibleTo:[snap.cfgId],createdBy:snap.cfgId,createdByName:aN};
+    if(typeof quickCreateMemory==='function')await quickCreateMemory(data);
+    else{var rec=Object.assign({id:'mem_'+Date.now()+'_'+Math.floor(Math.random()*10000),rawSource:'观影室',pinned:false,visibleTo:[],excludeFrom:[],activationCount:0,created:Date.now(),lastActivated:Date.now(),editedByUser:false},data);delete rec.source;await dbPut('memories',rec)}
+    try{var fr=await ctx.storage.get(K.film+snap.key);if(fr){fr.memSavedAt=Date.now();fr.memCount=(fr.memCount||0)+1;await ctx.storage.set(K.film+snap.key,fr)}}catch(e){}
+    T('观影记忆已生成（'+aN+' 执笔，新会话里 TA 会想起这次观影）');
+    try{if(typeof currentPage!=='undefined'&&currentPage==='memory'&&typeof renderMemories==='function'){renderMemories();if(typeof updateMemDashboard==='function')updateMemDashboard()}}catch(e){}
+  }catch(e){T('观影记忆未生成：'+String((e&&e.message)||e).slice(0,60))}
+}
 
 
 /* ═══ [net] 网络视频（自 1.12+解析版移植，适配 2.6.3 银幕即入口架构）═══
@@ -717,7 +747,7 @@ async function pickNet(url){
   finally{if(btn)btn.disabled=false}
 }
 
-IBApps.register({id:'cinema',name:'观影室',version:'2.6.3-net.11',sdk:2,nav:{label:'Cinema',after:'memory',before:'signs'},page:true,
+IBApps.register({id:'cinema',name:'观影室',version:'2.6.3-net.12',sdk:2,nav:{label:'Cinema',after:'memory',before:'signs'},page:true,
   mount:function(h,c){ctx=c;host=h;var st=document.createElement('style');st.id='ib-cinema-css';st.textContent=CSS;document.head.appendChild(st);
     migrate().then(loadCfg).then(function(){renderLib()});
     c.on('page',function(d){if(d.to==='cinema'){if(S.view==='play'){document.body.classList.add('ci-on');if(S.col){S.col.el.style.display='';S.col.grip.style.display=''}fitStage()}else renderLib()}
