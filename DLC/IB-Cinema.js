@@ -1,5 +1,6 @@
 /* Internal Beyond · 观影室（桌面端外置 DLC）2.6.3 —— 文件名 IB-Cinema.js
    net.12：散场记忆——「离开放映·保存并退出」时可勾选让 TA 把这次观影写成一条记忆（TA 本人执笔走主链路 callApi；存 memories，可见范围=仅 TA；进度与对话随附；档案记录 memSavedAt/memCount 防重）。
+   net.13：网络片同步（电脑→手机）——syncNetThreads() 把 isNet 档案的 sourceUrl/netKind/进度/done 写进对应「观影 · 片名」频道的 cine 字段（chatThreads 本就在同步范围，零后端改动），手机端据此把片合成进观影历史、点卡片重解析接着看、聊天共用同一条已同步频道；反向若 cine 更新则采纳（预留）。
    2.6.3：「最近在看」银幕右上角新增小删除圆钮（垃圾桶、玻璃圆底，确认后走 delRec——记录、档案、字幕缓存与「观影室 · 片名」频道一并删除）；原左下角「删除记录」文字键随之撤下（待放映态的「取消」不动，海报墙每张卡的 × 不动）。
    2.6.2：①「离开放映」删去「本次 X 分钟 · 看到 X:XX · 胶片…」统计行——这些都会写进观影档案，弹窗里只留问题与三键；随手拆掉只为这行算的四个临时变量。②说明文字加深加重：原 0.86rem、八成透明度压在放映画面上发灰，改 0.88rem、字重 450、明暗各给实色（明 #22406e / 暗 rgba(228,238,252,0.94)），h3 副题透明度 .55 → .68，标题与说明间距 6 → 12px，三键字重 500。
    2.6.1：离开放映确认框对齐主文件 API 页归档区的对话框——遮罩用主文件 .group-dialog-overlay（同一档 12px 模糊与暗度），面板用 .group-dialog（实色、16px 圆角、无 backdrop-filter、无 transform），自有样式只留宽度与排版。
@@ -284,7 +285,7 @@ function probe(file,done){var id=++S.probeId,u;try{u=URL.createObjectURL(file)}c
   v.addEventListener('error',function(){end('',0,0)});setTimeout(function(){end('',v.videoWidth||0,v.videoHeight||0)},9000);v.src=u}
 
 /* ═══ 片库（三栏都有内容：没有片子时中栏是一块暗下来的银幕与三个空位；选好文件后银幕就是待放映的那部片） ═══ */
-async function renderLib(){S.view='lib';var pg=page();if(!pg)return;if(!S.cfg)await loadCfg();pg.classList.remove('play');pg.classList.remove('focus');document.body.classList.remove('ci-on');document.body.classList.remove('ibr-col-off');
+async function renderLib(){S.view='lib';var pg=page();if(!pg)return;if(!S.cfg)await loadCfg();try{await syncNetThreads()}catch(e){}pg.classList.remove('play');pg.classList.remove('focus');document.body.classList.remove('ci-on');document.body.classList.remove('ibr-col-off');
   var tas=ctx.chat.list();var last=null;try{last=await ctx.storage.get(K.last)}catch(e){}if(last&&last.cfgId&&ctx.chat.cfg(last.cfgId))S.cfgId=last.cfgId;if((!S.cfgId||!ctx.chat.cfg(S.cfgId))&&tas.length)S.cfgId=tas[0].id;
   var recs=await recList();var logs=await logList();var films=recs.length,sess=0,ms=0;recs.forEach(function(r){sess+=r.sessions||0;ms+=r.totalMs||0});
   if(S.view!=='lib')return;
@@ -594,6 +595,21 @@ function leaveToLib(){closeMem();var v=video();if(v){try{v.pause()}catch(e){}}if
   document.removeEventListener('fullscreenchange',onFs);var ov=$('ci-exit-ov');if(ov)ov.remove();restoreSel();S.thread=null;renderLib()}
 
 
+
+/* ── net-sync（net.13）：网络片档案 ↔ chatThreads.cine 桥。thread 记录本就在同步范围（chatThreads），
+   写进 thread 即随既有增量同步到手机；手机端观影室据此合成「远程片」、一键重解析续播、聊天共用同一条频道。
+   反向：若 cine 的进度比本地档案新（手机端未来回传），采纳进本地档案。桌面档案为准，写前比对避免空转。 ── */
+async function syncNetThreads(){try{var recs=await recList();for(var i=0;i<recs.length;i++){var r=recs[i];
+  if(!r||!r.isNet||!r.sourceUrl||!r.thread)continue;
+  var th=null;try{th=await dbGet('chatThreads',r.thread)}catch(e){}if(!th)continue;
+  var cine=th.cine||{};
+  if(Number(cine.lastTs||0)>Number(r.lastTs||0)&&Number(cine.lastT||0)>Number(r.lastT||0)){r.lastT=Number(cine.lastT)||0;r.lastTs=cine.lastTs;try{await ctx.storage.set(K.film+r.key,r)}catch(e){}}
+  var nf={isNet:true,sourceUrl:r.sourceUrl,netKind:r.netKind||'',lastT:r.lastT||0,lastTs:r.lastTs||r.updated||0,done:!!r.done,dur:r.dur||0};
+  if(!cine.lastTs||cine.sourceUrl!==nf.sourceUrl||cine.netKind!==nf.netKind||Number(cine.lastT||0)!==Number(nf.lastT)||!!cine.done!==!!nf.done){
+    th.cine=nf;th.film=Object.assign({},th.film||{},{hash:r.key,title:r.title,file:r.file,size:r.size,duration:r.dur||0});
+    try{await dbPut('chatThreads',th)}catch(e){}}
+}}catch(e){}}
+
 /* ── 散场记忆（net.12）：TA 本人执笔，把这次观影写成一条记忆（同通话 Save memory 的记录格式） ── */
 async function saveFilmMemory(snap){
   var T=function(m){try{ctx.ui.toast(m)}catch(e){}};
@@ -747,7 +763,7 @@ async function pickNet(url){
   finally{if(btn)btn.disabled=false}
 }
 
-IBApps.register({id:'cinema',name:'观影室',version:'2.6.3-net.12',sdk:2,nav:{label:'Cinema',after:'memory',before:'signs'},page:true,
+IBApps.register({id:'cinema',name:'观影室',version:'2.6.3-net.13',sdk:2,nav:{label:'Cinema',after:'memory',before:'signs'},page:true,
   mount:function(h,c){ctx=c;host=h;var st=document.createElement('style');st.id='ib-cinema-css';st.textContent=CSS;document.head.appendChild(st);
     migrate().then(loadCfg).then(function(){renderLib()});
     c.on('page',function(d){if(d.to==='cinema'){if(S.view==='play'){document.body.classList.add('ci-on');if(S.col){S.col.el.style.display='';S.col.grip.style.display=''}fitStage()}else renderLib()}
