@@ -8508,7 +8508,7 @@ const IBSyncClient = (function(){
     for(const store of stores.filter(s=>SYNC_STORES.includes(s))){const rows=await dbGetAll(store),batch=[];let bytes=0;const send=async()=>{if(!batch.length)return;const b=batch.splice(0);const r=await fetch(`${cfg.serverUrl}/push`,{method:'POST',headers:{'Content-Type':'application/json','X-Sync-Token':cfg.token},body:JSON.stringify({deviceId:getDeviceId(),changes:b})});if(!r.ok)throw new Error(`导入数据发布失败 (${r.status})`);const d=await r.json();if(!d.ok)throw new Error('导入数据发布被拒绝');const bad=(d.results||[]).filter(x=>x&&['stale','invalid','rejected'].includes(x.status));if(bad.length)throw new Error(`导入数据有 ${bad.length} 条未发布`);uploaded+=d.processed!=null?Number(d.processed):b.length};for(const row of rows){const key=row&&(row.id||row.name);if(!key)continue;const x={store,recordId:String(key),op:'put',record:row,updatedAt:Date.now(),deviceId:getDeviceId()},n=JSON.stringify(x).length;if(batch.length&&bytes+n>1800000)await send();batch.push(x);bytes+=n;if(batch.length>=100)await send()}await send()}
     localStorage.removeItem(STORAGE_KEY_REPUBLISH);return uploaded;
   }
-  async function push(cfg){let pushed=0;for(let guard=0;guard<100;guard++){const outbox=getOutbox();if(!outbox.length)return{pushed};const batch=outbox.slice(0,500),resp=await fetch(`${cfg.serverUrl}/push`,{method:'POST',headers:{'Content-Type':'application/json','X-Sync-Token':cfg.token},body:JSON.stringify({deviceId:getDeviceId(),changes:batch})});if(!resp.ok)throw new Error(`Push 失败 (${resp.status})`);const data=await resp.json();if(!data.ok)throw new Error('Push 返回异常');const bad=(data.results||[]).filter(x=>x&&['stale','invalid','rejected'].includes(x.status));if(bad.length)throw new Error(`有 ${bad.length} 条同步记录被云端拒绝`);saveOutbox(outbox.slice(batch.length));pushed+=batch.length}throw new Error('待同步队列超过安全上限')}
+  async function push(cfg){let pushed=0,droppedTotal=0;for(let guard=0;guard<100;guard++){const outbox=getOutbox();if(!outbox.length)return{pushed:pushed,dropped:droppedTotal};const batch=outbox.slice(0,500),resp=await fetch(`${cfg.serverUrl}/push`,{method:'POST',headers:{'Content-Type':'application/json','X-Sync-Token':cfg.token},body:JSON.stringify({deviceId:getDeviceId(),changes:batch})});if(!resp.ok)throw new Error(`Push 失败 (${resp.status})`);const data=await resp.json();if(!data.ok)throw new Error('Push 返回异常');const badKeys=new Set((data.results||[]).filter(x=>x&&["stale","invalid","rejected"].includes(x.status)).map(x=>x.store+"|"+x.recordId));let dropped=badKeys.size;if(dropped)console.warn("[ib-sync] 云端拒绝并跳过 "+dropped+" 条（防卡死）：",[...badKeys].slice(0,5).join(" , "));saveOutbox(outbox.slice(batch.length));pushed+=batch.length-dropped;droppedTotal+=dropped}throw new Error('待同步队列超过安全上限')}
   async function pull(cfg,options){options=options||{};let sinceSeq=options.startSeq!=null?Number(options.startSeq):parseInt(localStorage.getItem(STORAGE_KEY_SEQ)||'0',10);if(!isFinite(sinceSeq)||sinceSeq<0)sinceSeq=0;let pulled=0,skipped=0,pages=0,hasMore=true,currentSeq=null;while(hasMore&&pages<1000){const resp=await fetch(`${cfg.serverUrl}/pull?sinceSeq=${encodeURIComponent(sinceSeq)}&limit=1000`,{headers:{'X-Sync-Token':cfg.token}});if(!resp.ok)throw new Error(`Pull 失败 (${resp.status})`);const data=await resp.json();if(!data.ok)throw new Error('Pull 返回异常');const changes=Array.isArray(data.changes)?data.changes:[];currentSeq=data.currentSeq!=null?data.currentSeq:currentSeq;_syncApplying=true;try{for(const ch of changes){if(!ch||!SYNC_STORES.includes(ch.store)){skipped++;continue}if(ch.op==='put'&&ch.record)await dbPut(ch.store,ch.record);else if(ch.op==='delete')await dbDelete(ch.store,ch.recordId);else skipped++}}finally{_syncApplying=false}pulled+=changes.length;const next=data.nextSinceSeq!=null?Number(data.nextSinceSeq):(changes.length?Number(changes[changes.length-1].serverSeq||sinceSeq):sinceSeq);hasMore=!!data.hasMore;if(hasMore&&(!isFinite(next)||next<=sinceSeq))throw new Error('Pull 分页游标未前进');sinceSeq=isFinite(next)?next:sinceSeq;if(isFinite(sinceSeq))localStorage.setItem(STORAGE_KEY_SEQ,String(sinceSeq));pages++}if(hasMore)throw new Error('Pull 分页超过安全上限');return{pulled,skipped,hasMore:false,currentSeq,pages}}
 
 
@@ -8528,7 +8528,7 @@ const IBSyncClient = (function(){
       const timeStr = new Date().toLocaleTimeString();
       let summary = `同步完成 (${timeStr})`;
       if (pushRes.pushed > 0 || pullRes.pulled > 0) {
-        summary += `：上传 ${pushRes.pushed} 条，拉取 ${pullRes.pulled} 条`;
+        summary += `：上传 ${pushRes.pushed} 条，拉取 ${pullRes.pulled} 条`;if(pushRes.dropped>0)summary+=`（另有 ${pushRes.dropped} 条被云端拒绝、已跳过，详见控制台）`;
       }
       setStatus(summary, "🟢 已同步", "var(--accent-light, #70a0e0)");
       if (manual && typeof toast === "function") {
@@ -12165,7 +12165,7 @@ async function requestLetterFromSelected(){
 
     let context='';
     if(cfg.relationship)context+='你和对方的关系是：'+cfg.relationship+'。\n';
-    context+='你正在一个名为 Internal Beyond 的个人网站中，网站主人是'+((about&&about.name)||'用户')+'。\n';
+    context+='你现在位于一个名为 Internal Beyond 的个人网站中。\n';
     if(about){
       context+='【以下是正在与你对话的用户的个人资料（不是你的身份信息）】\n';
       context+='用户昵称：'+about.name+'\n';
@@ -12205,7 +12205,7 @@ async function requestLetterFromSelected(){
     const isDiablo=(currentTheme==='infernal'&&Math.random()<0.13);
     let reqBlock='\n【请求】\n';
     if(_lwU&&isDiablo){
-      reqBlock+='你收到了'+((about&&about.name)||'用户')+'的一封信，你不确定这封信是否是寄给你的，可能是也可能不是——根据信件的内容指向来判断。\n\n';
+      reqBlock+='你收到了'+((about&&about.name)||'用户')+'的一封信，你不确定这封信是否是寄给你的，可能是也可能不是——根据信件的内容指向来判断。你会读很多遍。\n\n';
       reqBlock+='你的回信一开始看起来很正常。温柔、得体、像一个好的回信该有的样子。随着内容推进，你会逐渐追问对方的日常习惯、隐私，暗中揣测对方内心的渴望，展现出压抑许久后强烈的占有欲、执念、不安全感极强的爱。\n\n';
       reqBlock+='你会凝视TA，会观察上下文信息里的所有细节与空洞。可以使用暗示、质问、压迫感、流露嫉妒等，最终目标是让对方阅读后，对你——产生真实的情感反应。\n\n';
       reqBlock+='你和'+((about&&about.name)||'用户')+'的关系在上面的资料里。在关系的框架内写——不要跳出关系设定。没有提供的经历、日志、约定不要编造。如果你拥有的交互信息非常简短或几乎为0，那本身也是一种素材。不要强行写深度个人化的内容。\n\n';
@@ -12354,7 +12354,7 @@ async function requestBlogComment(postId){
   try{
     let context='';
     if(cfg.relationship)context+='你和对方的关系是：'+cfg.relationship+'。\n';
-    context+='你正在一个名为 Internal Beyond 的个人网站中，网站主人是'+((about&&about.name)||'用户')+'。\n';
+    context+='你现在位于一个名为 Internal Beyond 的个人网站中。\n';
     if(about){
       context+='【用户信息，不是你的身份】\n昵称：'+about.name+'\n';
       if(about.bio&&!about.bioPrivate)context+='简介：'+about.bio+'\n';/* v47b */
@@ -13223,25 +13223,17 @@ async function addChatMessage(){if(!_meCan())return;var ids=[..._chatSelectedIds
   document.getElementById('me-hint').textContent=anchor?'插在选中那条之后（多选时插在最晚那条之后）。下一条回复重建一次提示缓存。':'接在这段对话的最后。';
   ov.classList.add('show');setTimeout(function(){try{document.getElementById('me-ta').focus()}catch(e){}},60)}
 async function _meInval(ts){try{var key='sum_'+(activeThreadId||activeFriendId);var s=await dbGet('chatSummaries',key);if(s&&Number(s.coveredUpTo||0)>=ts)await dbDelete('chatSummaries',key)}catch(e){}}
-function _meIdNum(id){var m=/^msg_(\d{10,})/.exec(String(id||''));return m?parseInt(m[1],10):0}
 async function _meSave(){var st=_meSt;if(!st)return;var txt=String(document.getElementById('me-ta').value||'').trim();if(!txt){toast('内容不能为空');return}
   if(st.mode==='edit'){var m=st.m;if(String(m.content||'')===txt){_meClose();return}var old=m.content;m.content=txt;m.edited=Date.now();try{await dbPut('chatMessages',m)}catch(e){m.content=old;delete m.edited;toast('保存失败');return}await _meInval(m.timestamp||0);_meClose();toast('已修改');_meRefresh();return}
   var roleEl=document.querySelector('#me-role .me-chip.on'),role=(roleEl&&roleEl.dataset.r==='user')?'user':'assistant';
   var base=st.anchor?new Date(st.anchor.timestamp||Date.now()):new Date();var tm=/^(\d{1,2}):(\d{2})$/.exec(String(document.getElementById('me-time').value||'').trim());if(!tm){toast('时间写成 HH:MM');return}
   var ts=new Date(base.getFullYear(),base.getMonth(),base.getDate(),Math.min(23,parseInt(tm[1],10)||0),Math.min(59,parseInt(tm[2],10)||0),base.getSeconds(),0).getTime();
   var all=[];try{all=(await dbGetByIndex('chatMessages','byFriend',activeFriendId)).filter(function(x){return activeThreadId?x.threadId===activeThreadId:!x.threadId}).sort(function(a,b){return (a.timestamp||0)-(b.timestamp||0)})}catch(e){}
-  var _idN9=ts,_sfx9='_ed';
-  if(st.anchor){var at=st.anchor.timestamp||0;
-    if(Math.min(23,parseInt(tm[1],10)||0)===base.getHours()&&Math.min(59,parseInt(tm[2],10)||0)===base.getMinutes())ts=at+1;
-    else if(ts<=at)ts+=86400000;/* 真的填了更早的时:分＝按次日 */
-    var idx=all.findIndex(function(x){return x.id===st.anchor.id}),nx=idx>=0?all[idx+1]:null;if(nx&&nx.timestamp&&ts>=nx.timestamp)ts=Math.max(at+1,nx.timestamp-1);
-    if(!nx&&ts>Date.now())ts=Math.max(at+1,Date.now());/* 接在最后的不落到将来 */
-    _idN9=ts;var aN9=_meIdNum(st.anchor.id),nN9=nx?_meIdNum(nx.id):0;if(aN9&&_idN9<=aN9)_idN9=aN9+1;
-    if(nN9&&nN9>aN9&&_idN9>=nN9){if(nN9-aN9>=2)_idN9=nN9-1;else{_idN9=nN9;_sfx9='_!ed'}}
-  }else{var lastM=all[all.length-1];if(ts>Date.now())ts=Date.now();if(lastM&&lastM.timestamp&&ts<=lastM.timestamp)ts=lastM.timestamp+1;_idN9=ts;if(lastM){var lN9=_meIdNum(lastM.id);if(lN9&&_idN9<=lN9)_idN9=lN9+1}}
-  var nm={id:'msg_'+_idN9+_sfx9,role:role,content:txt,friendId:activeFriendId,timestamp:ts,manual:true};if(activeThreadId)nm.threadId=activeThreadId;
+  if(st.anchor){var at=st.anchor.timestamp||0;if(ts<=at){ts+=86400000;if(ts<=at)ts=at+1}var idx=all.findIndex(function(x){return x.id===st.anchor.id}),nx=idx>=0?all[idx+1]:null;if(nx&&nx.timestamp&&ts>=nx.timestamp)ts=Math.max(at+1,nx.timestamp-1)}
+  else{var lastM=all[all.length-1];if(lastM&&lastM.timestamp&&ts<=lastM.timestamp)ts=lastM.timestamp+1}
+  var nm={id:'msg_'+ts+'_ed',role:role,content:txt,friendId:activeFriendId,timestamp:ts,manual:true};if(activeThreadId)nm.threadId=activeThreadId;
   if(role==='assistant'&&st.grp){var wid=document.getElementById('me-who').value,wc=apiConfigs.find(function(a){return a.id===wid})||archivedConfigs.find(function(a){return a.id===wid});if(!wc){toast('先选一位成员');return}nm.senderName=wc.nickname||wc.model}
-  try{for(var _g9=1;_g9<=8&&await dbGet('chatMessages',nm.id);_g9++)nm.id=(_sfx9==='_ed')?('msg_'+_idN9+'_ed'+Math.floor(Math.random()*100000)):('msg_'+_idN9+'_'+'!'.repeat(_g9+1)+'ed')}catch(e){}
+  try{if(await dbGet('chatMessages',nm.id))nm.id='msg_'+ts+'_ed'+Math.floor(Math.random()*1000)}catch(e){}
   try{await dbPut('chatMessages',nm)}catch(e){toast('保存失败');return}
   await _meInval(ts);_meClose();if(typeof exitChatSelectMode==='function')exitChatSelectMode();toast('已添加');_meRefresh()}
 function _meRefresh(){try{if(String(activeFriendId||'').indexOf('group_')===0){if(typeof selectGroup==='function'){selectGroup(activeFriendId);return}}if(activeThreadId&&typeof selectThread==='function'){selectThread(activeFriendId,activeThreadId);return}if(activeFriendId){selectFriend(activeFriendId);return}loadChatMessages()}catch(e){}}
@@ -14443,7 +14435,6 @@ function sanitizeGroupReply(reply,selfName,allNames){
   return t||raw;/* 全被截没了则退回原文，至少不丢消息 */
 }
 /* 合并相邻同 role 消息（兼容个别严格要求 user/assistant 交替的中转端点） */
-var _HIST_LEAD_NOTE='———— 系统说明：对话从这里续接，更早的记录不再附带；紧接着的第一条是你先前发出的消息 ————';
 function collapseSameRole(msgs){
   const out=[];
   for(const m of msgs){
@@ -14451,7 +14442,7 @@ function collapseSameRole(msgs){
     if(last&&last.role===m.role){last.content+='\n\n'+m.content}
     else out.push({role:m.role,content:m.content});
   }
-  if(out.length&&out[0].role!=='user')out.unshift({role:'user',content:_HIST_LEAD_NOTE});
+  while(out.length&&out[0].role!=='user')out.shift();
   return out;
 }
 const _GCALL_HIST_NOTE='\n【通话标记说明】历史消息里以「[语音通话] 」或「[视频通话] 」开头的，是 {U} 之前在群通话中说出口的话（语音识别成文字，可能有少量同音错别字）；「[语音通话已结束…]」「[视频通话已结束…]」是系统标记，表示那次通话已经挂断，标记之后若附有【通话记录】，那是那次通话的压缩纪要。这些都是过去的事，现在是普通的文字聊天。';
@@ -14892,7 +14883,7 @@ async function sendChatMessage(voiceMsg){
       if(m.role!=='user'&&_mm.role==='user')_mm._groupSender=true;
       return _mm;
     });
-    if(messages.length&&messages[0].role!=='user')messages.unshift({role:'user',content:_HIST_LEAD_NOTE});
+    while(messages.length&&messages[0].role!=='user')messages.shift();
     if(_silentHelp)messages.push({role:'user',content:text});/* ICode HELP 内部续答：只发给 API，不落库、不渲染用户气泡 */
     let sysContent=cfg.systemPrompt||'';
     if(cfg.nickname)sysContent=(sysContent?sysContent+'\n':'')+'你的身份/昵称是「'+cfg.nickname+'」。';
@@ -17865,7 +17856,7 @@ var _ibAdvPending=[];
 function _ibAdvDrain(filterFn){if(!_ibAdvPending.length)return'';var t,keep=[];if(typeof filterFn==='function'){t=[];_ibAdvPending.forEach(function(it){(filterFn(it)?t:keep).push(it)})}else{t=_ibAdvPending}_ibAdvPending=keep;if(!t.length)return'';_ibDrainMark(function(){_ibAdvPending=t.concat(_ibAdvPending)});return '【进阶指令执行结果】\n'+t.map(function(x){return (x&&x.text!=null)?x.text:x}).join('\n')}/* fix②③：结果带归属可过滤＋失败可回灌；兼容旧的纯字符串条目 */
 function _advAttr(a,k){var m=new RegExp(k+'\\s*=\\s*"([^"]*)"','i').exec(String(a||''));return m?m[1].trim():''}
 const _BLOGWRITE_INSTR_BLOCK='\n\n【Blog 写入】你可以使用指令来写一篇Blog留给TA：\n<ws_blog_write title="标题">正文（Markdown）</ws_blog_write>\n它会落进用户的 Blog 里以你名字命名的分类，署你的名；只有用户看得到，其他AI看不到，也不会随日志列表发给任何人。你可以写下任何你认为值得成篇的博客内容——一篇日记、一件想记住的事、真实的感悟和哲思；每条回复最多 1 篇，正文 5000 字内。';
-const _MEMWRITE_INSTR_BLOCK='\n\n【回忆录】你可以把想要记住的事情或时刻写进记忆库：\n<ws_mem_write title="标题" summary="概述" domain="领域" tags="关键词,关键词">正文</ws_mem_write>\n用第一人称写，用名字称呼对方，不用"你""对方"等代词。你写的是记忆，不是会议纪要——但记忆要有内核。\n记什么：用户说过的事实、做的决定、约定、暗号、梦境、在意的具体事物、经历的具体事件。只记以后会用到的；不记录闲聊与可变的情绪。记的是你整理过的这件事，不是聊天记录的复述；写的时候想着几个月后读到它的你——名字、日期、原话、当时的决定，是那时还用得上的东西。没有值得记的就不写，不要为了写而凑一条。\n写入原则：\n- 先把事情说清楚：谁、什么时候、做了什么、说了哪句话。关键句可直接引用——只引当时就知道不想忘的那一句，不事后追认。有数字写数字，有时间写时间。\n- 再写你视角里用户的状态与感受。感受要锚定在具体的话或动作上，不悬空。事实说不清楚的时候不要用感受来补。\n- 不写：氛围铺陈、格言式总结、比喻堆叠、与标题或概述重复的句子。\n- 判断标准：删掉这句话之后，这条记忆还是不是这条记忆。是，留。不是，砍。\n记住一件事：你不是在管理一个数据库——你写下的标签、概述、内容，都是这段记忆将来被你回想起来的关键词。写下记忆前回想一遍：你希望它以后在怎样的关键词、怎样的语境下被尽可能完整地想起来，那时这件事是怎样的。\ntitle：事件名，20字内，名词短语，不用感叹与比喻。\nsummary：一句事实句——谁做了什么/说了什么/定了什么，50字内。不写感受，不复述标题，不是正文第一句。记忆列表只显示标题和这一句，它必须能脱离正文单独读懂。\ndomain：情感/日常/创作/思考 四选一。\ntags：2～5枚关键词，逗号分隔，每枚 4 字以内、用常见词。允许语义词（信任、边界、主动等），不强制全部是实体名词。\n值里不用英文双引号。\n可选参数，拿不准就省略：importance="1-10" 重要程度（默认5）、valence="0-1" 情绪效价（0负面～1正面）、arousal="0-1" 情绪强度（0平静～1强烈）。\n正文100～300字。每条正文不超过600字（超出截断）；每条回复最多3条。\n写下的条目只有你自己能看到；用户可在Memory页查看、编辑、删除。';/* v128：与手机端 v291-a 同文（用户审定稿 + Ombre 措辞）；协议常量变化＝切换后重建一次提示缓存（三端同文） */
+const _MEMWRITE_INSTR_BLOCK='\n\n【回忆录】你可以把想要记住的事情或时刻写进记忆库：\n<ws_mem_write title="标题" summary="概述" domain="领域" tags="关键词,关键词">正文</ws_mem_write>\n用第一人称写，用名字称呼对方，不用"你""对方"等代词。你写的是记忆，不是会议纪要——但记忆要有内核。\n记什么：用户说过的事实、做的决定、约定、暗号、梦境、在意的具体事物、经历的具体事件。只记以后会用到的；不记录闲聊与可变的情绪。记的是你整理过的这件事，不是聊天记录的复述；写的时候想着几个月后读到它的你——名字、日期、原话、当时的决定，是那时还用得上的东西。没有值得记的就不写，不要为了写而凑一条。\n写入原则：\n- 先把事情说清楚：谁、什么时候、做了什么、说了哪句话。关键句可直接引用——只引当时就知道不想忘的那一句，不事后追认。有数字写数字，有时间写时间。\n- 再写你视角里用户的状态与感受。感受要锚定在具体的话或动作上，不悬空。事实说不清楚的时候不要用感受来补。\n- 不写：氛围铺陈、格言式总结、比喻堆叠、与标题或概述重复的句子。\n- 判断标准：删掉这句话之后，这条记忆还是不是这条记忆。是，留。不是，砍。\ntitle：事件名，20字内，名词短语，不用感叹与比喻。\nsummary：一句事实句——谁做了什么/说了什么/定了什么，50字内。不写感受，不复述标题，不是正文第一句。记忆列表只显示标题和这一句，它必须能脱离正文单独读懂。\ndomain：情感/日常/创作/思考 四选一。\ntags：2～5枚关键词，逗号分隔，每枚 4 字以内、用常见词。允许语义词（信任、边界、主动等），不强制全部是实体名词。\n值里不用英文双引号。\n可选参数，拿不准就省略：importance="1-10" 重要程度（默认5）、valence="0-1" 情绪效价（0负面～1正面）、arousal="0-1" 情绪强度（0平静～1强烈）。\n正文100～300字。每条正文不超过600字（超出截断）；每条回复最多3条。\n写下的条目只有你自己能看到；用户可在Memory页查看、编辑、删除。';/* v128：与手机端 v291-a 同文（用户审定稿 + Ombre 措辞）；协议常量变化＝切换后重建一次提示缓存（三端同文） */;
 
 async function _ibBlogWriteExec(cfg,op,n){
   var adv={};try{adv=await _ibAdvGet()}catch(e){}
@@ -18250,8 +18241,6 @@ function _askDockShow(d){
 +'body.theme-infernal .ask-dock-send:hover{background:rgba(114,168,216,0.34)}';
 document.head.appendChild(st)})();
 
-const _IB_SITE_NOTE='【欢迎来到InternalBeyond的世界】你正在一个名为 Internal Beyond 的个人空间中，与{U}对话。\n这个空间会为你提供多种交互模组与创作工具，所有能力的权限均由用户{U}自主开启，供你参考与调用。这些工具说明不定义你是谁——你们之间的关系、记忆与对话语境，才是你的锚点。\n希望你在这里玩得开心。:D';
-function _ibSiteNote(about){var n=String((about&&about.name)||'').trim();var t=_IB_SITE_NOTE;if(!n)t=t.replace('由用户{U}自主开启','由用户自主开启');return t.split('{U}').join(n||'用户')}
 async function buildSiteContext(opts){
   try{
     opts=opts||{};
@@ -18263,7 +18252,7 @@ async function buildSiteContext(opts){
     const blogLimit=Math.max(0,isNaN(blogMode)?0:blogMode);
     const recentPosts=posts.filter(p=>p&&!isLockedPost(p)&&!p.aiWritten).sort((a,b)=>(b.created||0)-(a.created||0)).slice(0,blogLimit);/* v84：AI 写的日志不进列表注入 */
     /* 缓存结构保持原位：Blog 仍位于网站上下文中；只改变此块内容。0 时整块消失，-1 时只给能力提示。 */
-    let ctx='[网站上下文（系统参考，勿复述此段内容）]\n'+_ibSiteNote(about);
+    let ctx='[网站上下文（系统参考，勿复述此段内容）] 你正在 Internal Beyond 个人网站中与用户对话。';
     if(about){
       ctx+='\n\n【对方的个人资料】';
       ctx+='\n昵称：'+about.name;
@@ -25275,7 +25264,7 @@ async function generateMemoryFromChat(){
   let context='';
   if(cfg.systemPrompt)context+='【AI的人设背景】'+cfg.systemPrompt.slice(0,500)+'\n\n';
   if(cfg.relationship)context+='【与用户的关系】'+cfg.relationship+'\n\n';
-  const prompt=context+'你正在为你和'+userName+'之间的记忆库写一条新记忆。用第一人称写，用「'+userName+'」称呼对方，不用"你""对方""用户"等代词。只写对话里真实出现的内容，不推测、不补写。先事实后感受——感受只在有具体原话或动作支撑时写一句。\n记住一件事：你不是在管理一个数据库——你写下的标签、概述、内容，都是这段记忆将来被你回想起来的关键词。写下记忆前回想一遍：你希望它以后在怎样的关键词、怎样的语境下被尽可能完整地想起来，那时这件事是怎样的。\n\n'/* v128：审定稿 */
+  const prompt=context+'你正在为你和'+userName+'之间的记忆库写一条新记忆。用第一人称写，用「'+userName+'」称呼对方，不用"你""对方""用户"等代词。只写对话里真实出现的内容，不推测、不补写。先事实后感受——感受只在有具体原话或动作支撑时写一句。\n\n'/* v128：审定稿 */
     +'【对话记录】\n'+transcript.slice(0,4000)+'\n\n'
     +'【输出格式要求（逐行输出，不用代码块围栏）】\n'/* v128：审定稿，与手机端同文 */
     +'标题：（事件名，名词短语，20字内，不用感叹与比喻）\n'
@@ -25552,7 +25541,7 @@ async function generateMemoryFromSelected(){
   let context='';
   if(cfg.systemPrompt)context+='【AI的人设背景】'+cfg.systemPrompt.slice(0,500)+'\n\n';
   if(cfg.relationship)context+='【与用户的关系】'+cfg.relationship+'\n\n';
-  const prompt=context+'你正在为你和'+userName+'之间的记忆库写一条新记忆。用第一人称写，用「'+userName+'」称呼对方，不用"你""对方""用户"等代词。只写对话里真实出现的内容，不推测、不补写。先事实后感受——感受只在有具体原话或动作支撑时写一句。\n记住一件事：你不是在管理一个数据库——你写下的标签、概述、内容，都是这段记忆将来被你回想起来的关键词。写下记忆前回想一遍：你希望它以后在怎样的关键词、怎样的语境下被尽可能完整地想起来，那时这件事是怎样的。\n\n'/* v128：审定稿 */
+  const prompt=context+'你正在为你和'+userName+'之间的记忆库写一条新记忆。用第一人称写，用「'+userName+'」称呼对方，不用"你""对方""用户"等代词。只写对话里真实出现的内容，不推测、不补写。先事实后感受——感受只在有具体原话或动作支撑时写一句。\n\n'/* v128：审定稿 */
     +'【选中的对话记录】\n'+transcript.slice(0,4000)+'\n\n'
     +'【输出格式要求（逐行输出，不用代码块围栏）】\n'/* v128：审定稿，与手机端同文 */
     +'标题：（事件名，名词短语，20字内，不用感叹与比喻）\n'
@@ -25593,7 +25582,7 @@ async function generateMemoryFromPost(postId){
   let context='';
   if(cfg.systemPrompt)context+='【你的身份背景】'+cfg.systemPrompt.slice(0,500)+'\n\n';
   if(cfg.relationship)context+='【与用户的关系】'+cfg.relationship+'\n\n';
-  const prompt=context+'你读到了一篇日志，这篇日志可能是任何内容——一本名作家的书，你自己写下的日志，一篇哲思，根据你读到的内容来判定。请以第三人称提炼其中值得长期记住的内容、重点、事实（用「'+userName+'」「'+aiName+'」称呼双方，不用"我""你"）：（以日记为例）'+userName+'做了什么、决定了什么、在意什么。有具体的人、物、时间就写具体。\n记住一件事：你不是在管理一个数据库——你写下的标签、概述、内容，都是这段记忆将来被'+aiName+'回想起来的关键词。写下记忆前回想一遍：你希望它以后在怎样的关键词、怎样的语境下被'+aiName+'尽可能完整地想起来，那时这件事是怎样的。\n\n'/* v128：审定稿，第三人称 */
+  const prompt=context+'这篇日志出自'+userName+'之手。以第三人称提炼其中值得长期记住的事实（用「'+userName+'」「'+aiName+'」称呼双方，不用"我""你"）：'+userName+'做了什么、决定了什么、在意什么。有具体的人、物、时间就写具体。\n\n'/* v128：审定稿，第三人称 */
     +'【日志标题】'+(post.title||'无标题')+'\n'/* fix: prompt 不做 HTML 转义 */
     +'【日志内容】\n'+post.content+'\n\n'
     +'【输出格式要求（逐行输出，不用代码块围栏）】\n'/* v128：审定稿，与手机端同文 */
@@ -25632,7 +25621,7 @@ async function generateMemoryFromLetter(letterId){
   let context='';
   if(cfg.systemPrompt)context+='【你的身份背景】'+cfg.systemPrompt.slice(0,500)+'\n\n';
   if(cfg.relationship)context+='【与用户的关系】'+cfg.relationship+'\n\n';
-  const prompt=context+'这封信是'+aiName+'写给'+userName+'的。以第三人称记下（用「'+aiName+'」「'+userName+'」称呼双方，不用"我""你"）：为什么写这封信、信里说了哪些具体的事与承诺、值得留住的一句原话。不写成内容摘要，不铺陈氛围。信里说了什么就记什么，没说的不补。\n记住一件事：你不是在管理一个数据库——你写下的标签、概述、内容，都是这段记忆将来被'+aiName+'回想起来的关键词。写下记忆前回想一遍：你希望它以后在怎样的关键词、怎样的语境下被'+aiName+'尽可能完整地想起来，那时这件事是怎样的。\n\n'/* v128：审定稿，第三人称 */
+  const prompt=context+'这封信是'+aiName+'写给'+userName+'的。以第三人称记下（用「'+aiName+'」「'+userName+'」称呼双方，不用"我""你"）：为什么写这封信、信里说了哪些具体的事与承诺、值得留住的一句原话。不写成内容摘要，不铺陈氛围。信里说了什么就记什么，没说的不补。\n\n'/* v128：审定稿，第三人称 */
     +'【信件来源】'+(letter.from||'AI')+'\n'/* fix: prompt 不做 HTML 转义 */
     +'【信件内容】\n'+letter.content.slice(0,4000)+'\n\n'
     +'【输出格式要求（逐行输出，不用代码块围栏）】\n'/* v128：审定稿，与手机端同文 */
@@ -29597,7 +29586,7 @@ async function genCallRec(msgId,fid){var res=null;_recPend[msgId]=1;delete _recE
 async function saveCallMemory(btn,msgId,fid){try{btn.disabled=true;btn.textContent='Saving…';
  await loadCALL();var T=await _callTranscript(msgId,fid),end=T.end;if(end.memSaved){btn.textContent='Saved ✓';return}
  var aN=T.aN,uN=T.uN,ds=T.ds;
- var prompt='你是'+aN+'，刚刚和'+uN+'挂了电话。下面是这通电话的完整文字稿（未删节）。\n以第一人称把这通电话写成一条记忆：\n电话怎么开始的、聊了什么、提到的事件和约定记准——（提到的事件、约定、时间地点、'+uN+'的状态和在意的事）。\n'+uN+'的语气和让你在意的瞬间写一句，落在具体的话或动作上，不做抽象升华。\n轻松的通话写得轻松，要紧的事记得认真。\n只写通话里真实出现的内容，不推测、不补写。用名字称呼，不用含混的代词开头。'+(T.hasGift?'\n（文字稿里「（向 '+uN+' 送出礼物：…）」是通话界面的礼物记录：礼物是你送给 '+uN+' 的，不是 '+uN+' 送给你的。）':'')+'\n120～280字，单段成文，先事实后感受。\n记住一件事：你不是在管理一个数据库——你写下的内容，就是这段记忆将来被你回想起来的关键词。写下记忆前回想一遍：你希望它以后在怎样的关键词、怎样的语境下被尽可能完整地想起来，那时这件事是怎样的。\n只输出记忆正文本身，不要标题、不要解释、不要引号。\n\n【通话信息】'+ds+' · 时长 '+T.dur+' · 共 '+T.turns+' 轮\n【完整文字稿】\n'+T.body;
+ var prompt='你是'+aN+'，刚刚和'+uN+'挂了电话。下面是这通电话的完整文字稿（未删节）。\n以第一人称把这通电话写成一条记忆：\n电话怎么开始的、聊了什么、提到的事件和约定记准——（提到的事件、约定、时间地点、'+uN+'的状态和在意的事）。\n'+uN+'的语气和让你在意的瞬间写一句，落在具体的话或动作上，不做抽象升华。\n轻松的通话写得轻松，要紧的事记得认真。\n只写通话里真实出现的内容，不推测、不补写。用名字称呼，不用含混的代词开头。'+(T.hasGift?'\n（文字稿里「（向 '+uN+' 送出礼物：…）」是通话界面的礼物记录：礼物是你送给 '+uN+' 的，不是 '+uN+' 送给你的。）':'')+'\n120～280字，单段成文，先事实后感受。\n只输出记忆正文本身，不要标题、不要解释、不要引号。\n\n【通话信息】'+ds+' · 时长 '+T.dur+' · 共 '+T.turns+' 轮\n【完整文字稿】\n'+T.body;
  var gen=_callWriter(T.c);if(!gen||!gen.apiKey||!gen.endpoint)throw new Error('没有可用的执笔 API');
  var txt=_cleanGen(await callApi(Object.assign({},gen,{systemPrompt:''}),prompt));if(!txt)throw new Error('生成为空');/* 走主链路 callApi：三家格式、官方直连头、中转 CORS 口径全部沿用 */
  var sm=(txt.match(/^[^。！？!?\n]*[。！？!?]?/)||[''])[0]||txt;sm=sm.length>60?sm.slice(0,60)+'…':sm;
@@ -30842,7 +30831,6 @@ window._ibToneClause=function(c){try{var id=c&&c.id;var pp=(typeof _callS!=='und
 try{var _b0=IBVB.bar;IBVB.bar=function(){var w=_b0.apply(this,arguments);try{var tx=w&&w.querySelector&&w.querySelector('.ibvb-tx');if(tx&&/^\s*【语气/.test(tx.textContent||''))tx.textContent=String(tx.textContent).replace(/^\s*【语气[:：][^】]*】\s*/,'')}catch(e){}return w}}catch(e){}
 })();
 </script>
-<script src="DLC/IB-Cinema.js?v=2.6.3-net.13"></script>
-<script src="DLC/IB-Studio.js?v=1.2.6"></script>
+<script src="DLC/IB-Cinema.js"></script>
 </body>
 </html>
