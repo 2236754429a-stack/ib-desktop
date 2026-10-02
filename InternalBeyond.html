@@ -8285,9 +8285,9 @@ i would like the room to be enough.
 
 <script src="kelivo-import.js"></script>
 <script>
-const DB_NAME='InternalBeyondDB',DB_VER=15;let db;/* v15 — Internet Beyond：新增 feed（动态流），两端同轮 14→15 */
+const DB_NAME='InternalBeyondDB',DB_VER=16;let db;/* v287-d：+memVectors（记忆向量，仅本地不进同步），两端同轮 15→16 */
 /* v46 — 全站对象仓库清单：建库、重置、导入三处共用同一份，避免各自维护而漏项 */
-const IB_STORES=['posts','categories','about','music','apiSettings','chatMessages','letters','apiConfigs','groups','blogComments','memories','chatThreads','chatSummaries','uploadedFiles','blogAnnotations','projects','projectFiles','autoMemory','calEvents','calNotes','calLedger','feed'];
+const IB_STORES=['posts','categories','about','music','apiSettings','chatMessages','letters','apiConfigs','groups','blogComments','memories','chatThreads','chatSummaries','uploadedFiles','blogAnnotations','projects','projectFiles','autoMemory','calEvents','calNotes','calLedger','feed','memVectors'];
 function openDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open(DB_NAME,DB_VER);req.onupgradeneeded=e=>{const d=e.target.result;IB_STORES.forEach(s=>{if(!d.objectStoreNames.contains(s))d.createObjectStore(s,{keyPath:s==='categories'?'name':'id'})});try{const store=e.target.transaction.objectStore('chatMessages');if(!store.indexNames.contains('byFriend'))store.createIndex('byFriend','friendId',{unique:false})}catch(ex){};try{const pf=e.target.transaction.objectStore('projectFiles');if(!pf.indexNames.contains('byProject'))pf.createIndex('byProject','projectId',{unique:false})}catch(ex){};try{const am=e.target.transaction.objectStore('autoMemory');if(!am.indexNames.contains('byFriend'))am.createIndex('byFriend','friendId',{unique:false})}catch(ex){}};req.onsuccess=()=>{db=req.result;resolve(db)};req.onerror=()=>reject(req.error)})}
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -24264,20 +24264,59 @@ function _ibRelScore(m,terms){
   terms.forEach(function(T){wSum+=T.idf;if(strong.indexOf(T.t)!==-1)wHit+=T.idf;else if(body.indexOf(T.t)!==-1)wHit+=T.idf*0.45});
   return wSum>0?wHit/wSum:0;
 }
-async function _ibEmbCfg(){try{const s=await dbGet('apiSettings','memEmbedCfg');return Object.assign({enabled:false,base:'',key:'',model:''},s||{})}catch(e){return {enabled:false,base:'',key:'',model:''}}}
+/* v287-d 嵌入通道默认走服务器代理（/api/ib-sync/embeddings）：Key 只存在服务器 config.json，公开 HTML 不落密钥；
+   用户保存过 memEmbedCfg 则以保存为准。向量存本地 memVectors（v287-d 新库，不在 SYNC_STORES），不随记忆同步膨胀服务器。 */
+const _IB_EMB_DEFAULT={enabled:true,base:'https://notes.emberroom.cn/api/ib-sync',key:'',model:'Qwen/Qwen3-Embedding-0.6B'};
+function _ibEmbOk(EC){return !!EC&&!!EC.enabled&&!!EC.base&&!!EC.model&&(!!EC.key||String(EC.base).indexOf('/api/ib-sync')!==-1)}
+async function _ibEmbCfg(){try{const s=await dbGet('apiSettings','memEmbedCfg');if(s)return Object.assign({enabled:false,base:'',key:'',model:''},s)}catch(e){}return Object.assign({},_IB_EMB_DEFAULT)}
 const _ibEmbCache=new Map();
-async function _ibEmbGet(EC,text){
-  const key=(EC.model||'')+'|'+String(text).slice(0,600);
-  if(_ibEmbCache.has(key))return _ibEmbCache.get(key);
-  const r=await fetch(String(EC.base).replace(/\/+$/,'')+'/embeddings',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+EC.key},body:JSON.stringify({model:EC.model,input:[String(text).slice(0,600)]})});
-  if(!r.ok)throw new Error('embeddings HTTP '+r.status);
-  const j=await r.json();const v=j&&j.data&&j.data[0]&&j.data[0].embedding;
-  if(!v||!v.length)throw new Error('embeddings 返回为空');
-  _ibEmbCache.set(key,v);return v;
+function _ibEmbHeaders(EC){/* 代理通道附带同步 token 鉴权；第三方直连不带（不外泄 token） */
+  const h={'Content-Type':'application/json','Authorization':'Bearer '+(EC.key||'')};
+  if(String(EC.base||'').indexOf('/api/ib-sync')!==-1){try{const c=(typeof IBSyncClient!=='undefined'&&IBSyncClient.getCfg)?IBSyncClient.getCfg():null;if(c&&c.token)h['X-Sync-Token']=c.token}catch(e){}}
+  return h}
+async function _ibEmbBatch(EC,texts){/* OpenAI 兼容 /embeddings（≤32 条批量）；进程内缓存；失败抛错由调用方降级 */
+  const list=(texts||[]).map(function(t){return String(t).slice(0,600)});
+  const out=[];const slots=[];
+  list.forEach(function(t,i){const k=(EC.model||'')+'|'+t;if(_ibEmbCache.has(k))out[i]=_ibEmbCache.get(k);else{out[i]=null;slots.push(i)}});
+  if(slots.length){
+    const r=await fetch(String(EC.base).replace(/\/+$/,'')+'/embeddings',{method:'POST',headers:_ibEmbHeaders(EC),body:JSON.stringify({model:EC.model,input:slots.map(function(i){return list[i]})})});
+    if(!r.ok)throw new Error('embeddings HTTP '+r.status);
+    const j=await r.json();
+    const arr=((j&&j.data)||[]).slice().sort(function(a,b){return (a.index||0)-(b.index||0)});
+    if(arr.length!==slots.length)throw new Error('embeddings 返回数量不符');
+    arr.forEach(function(item,i){const v=item&&item.embedding;if(!v||!v.length)throw new Error('embeddings 返回为空');out[slots[i]]=v;_ibEmbCache.set((EC.model||'')+'|'+list[slots[i]],v)});
+  }
+  return out;
 }
+async function _ibEmbGet(EC,text){const v=await _ibEmbBatch(EC,[text]);return v[0]}
 function _ibEmbCos(a,b){let d=0,na=0,nb=0;const n=Math.min(a.length,b.length);for(let i=0;i<n;i++){d+=a[i]*b[i];na+=a[i]*a[i];nb+=b[i]*b[i]}if(!na||!nb)return 0;return d/Math.sqrt(na*nb)}
 function _ibSimNorm(cos){return Math.max(0,Math.min(1,(cos-0.25)/0.55))}
-async function _ibEmbFill(mem){try{const EC=await _ibEmbCfg();if(!EC.enabled||!EC.base||!EC.key||!EC.model)return;if(mem.emb&&mem.emb.length)return;const v=await _ibEmbGet(EC,(mem.title||'')+' '+(mem.summary||'')+' '+String(mem.content||'').slice(0,800));if(v&&v.length){const o=await dbGet('memories',mem.id);if(o&&!o.emb){o.emb=v;o.embM=EC.model;await dbPut('memories',o)}}}catch(e){}}
+async function _ibEmbFill(mem){/* 为单条记忆补向量：失败静默（OB：写入不被向量服务绑架）；v287-d 向量只进本地 memVectors */
+  try{const EC=await _ibEmbCfg();if(!_ibEmbOk(EC))return;
+    const ex=await dbGet('memVectors',mem.id);if(ex&&ex.v&&ex.v.length)return;
+    if(mem.emb&&mem.emb.length)return;
+    const v=await _ibEmbGet(EC,(mem.title||'')+' '+(mem.summary||'')+' '+String(mem.content||'').slice(0,800));
+    if(v&&v.length)await dbPut('memVectors',{id:mem.id,v:v,m:EC.model,ts:Date.now()})}catch(e){}
+}
+var _ibEmbSweepBusy=false;
+async function _ibEmbFillBatch(mems,note){/* 批量补嵌：16 条/请求；单批失败降级逐条 */
+  const EC=await _ibEmbCfg();let ok=0;
+  for(let i=0;i<mems.length;i+=16){
+    const part=mems.slice(i,i+16);
+    try{const vecs=await _ibEmbBatch(EC,part.map(function(m){return (m.title||'')+' '+(m.summary||'')+' '+String(m.content||'').slice(0,800)}));
+      for(let k=0;k<part.length;k++){const v=vecs[k];if(v&&v.length){await dbPut('memVectors',{id:part[k].id,v:v,m:EC.model,ts:Date.now()});ok++}}}
+    catch(e){for(const m of part){try{await _ibEmbFill(m);ok++}catch(e2){}}}
+    if(note)try{note(ok,Math.min(i+16,mems.length),mems.length)}catch(e){}
+  }
+  return ok}
+async function _ibEmbSweep(){/* 后台渐补：每轮最多 8 条，页面开着就慢慢补齐，无需手动一次补完 */
+  if(_ibEmbSweepBusy)return;_ibEmbSweepBusy=true;
+  try{const EC=await _ibEmbCfg();if(!_ibEmbOk(EC))return;
+    const all=await dbGetAll('memories');const have=new Set((await dbGetAll('memVectors')).map(function(x){return x.id}));
+    const todo=all.filter(function(m){return m&&m.id&&!have.has(m.id)&&!(m.emb&&m.emb.length)&&!(m.needsReview&&!m.reviewed)}).slice(0,8);
+    if(todo.length)await _ibEmbFillBatch(todo)}catch(e){}finally{_ibEmbSweepBusy=false}
+}
+try{setTimeout(function(){_ibEmbSweep()},12000);setInterval(function(){_ibEmbSweep()},5*60*1000)}catch(e){}
 async function _ibGateLogGet(){try{const s=await dbGet('apiSettings','memGateLog');return (s&&s.items)||[]}catch(e){return[]}}
 async function _ibGateLogPush(rec){try{const s=(await dbGet('apiSettings','memGateLog'))||{id:'memGateLog',items:[]};const items=(s.items||[]);items.push(rec);while(items.length>200)items.shift();await dbPut('apiSettings',{id:'memGateLog',items:items})}catch(e){}}
 async function _ibCareBadge(){try{let all=[];try{all=await dbGetAll('memories')}catch(e){}const n=all.filter(function(m){return m.needsReview&&!m.reviewed}).length;const b=document.getElementById('mem-care-d');if(!b)return;b.textContent=n?('记忆养护 ·'+n):'记忆养护';b.style.fontWeight=n?'700':''}catch(e){}}
@@ -24296,16 +24335,19 @@ async function _ibCareRenderD(box){
   let lastDigest=0;try{const s2=await dbGet('apiSettings','memCareState');lastDigest=(s2&&s2.lastDigest)||0}catch(e){}
   const changed=all.filter(function(m){return (m.created||0)>lastDigest}).length;
   const E=typeof esc==='function'?esc:function(s){return String(s==null?'':s)};
+  const clamp2=function(t){/* v287-d 两行截断的内容预览：归档/待审要能看到正文才能拍板 */
+    const s=String(t==null?'':t).replace(/\s+/g,' ').trim().slice(0,180);
+    return s?'<div style="font-size:12px;opacity:.65;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-top:2px">'+E(s)+'</div>':''};
   let h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="font-size:16px">记忆养护</b><button class="btn" style="padding:2px 10px" data-care-close="1">关闭</button></div>';
   h+='<p class="hint" style="opacity:.65;margin:0 0 8px">销账只许建议，绝不自动执行（WrenWen 纪律）</p>';
   h+='<div style="font-weight:600;margin:6px 0 4px">待审记忆（'+review.length+'）</div>';
-  if(review.length){review.slice(0,10).forEach(function(m){h+='<div style="display:flex;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.2)"><div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+E(m.title)+'</div><div style="font-size:12px;opacity:.65;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+E(m.reviewNote||'含未核实引语')+'</div></div><button class="btn" style="flex:none;padding:4px 10px" data-care-ok="'+E(m.id)+'">确认无误</button><button class="btn" style="flex:none;padding:4px 10px" data-care-del="'+E(m.id)+'">删除</button></div>'})}
+  if(review.length){review.slice(0,10).forEach(function(m){h+='<div style="display:flex;gap:6px;align-items:flex-start;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.2)"><div style="flex:1;min-width:0"><div style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">'+E(m.title||'（无标题）')+'</div>'+clamp2(m.summary||m.content)+'<div style="font-size:12px;opacity:.65;margin-top:2px">'+E(m.reviewNote||'含未核实引语')+'</div></div><button class="btn" style="flex:none;padding:4px 10px" data-care-ok="'+E(m.id)+'">确认无误</button><button class="btn" style="flex:none;padding:4px 10px" data-care-del="'+E(m.id)+'">删除</button></div>'})}
   else h+='<p class="hint" style="margin:2px 0 6px;opacity:.65">没有待审条目。AI 写下的引语会逐字回源核对，对不上的先压在这里等你确认。</p>';
   h+='<div style="font-weight:600;margin:10px 0 4px">做梦（Ombre 精神）</div>';
   h+='<p class="hint" style="margin:2px 0 6px;opacity:.75">自上次做梦以来新增 <b>'+changed+'</b> 条。变动攒多了去「记忆总结」消化一次。</p>';
   h+='<button class="btn" style="padding:6px 12px" data-care-dream="1">记下这次做梦</button>';
   h+='<div style="font-weight:600;margin:10px 0 4px">归档建议（'+stale.length+'）</div>';
-  if(stale.length){stale.forEach(function(m){const d=Math.floor((now-(m.lastActivated||m.created||now))/86400000);h+='<div style="display:flex;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.2)"><div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+E(m.title)+'</div><div style="font-size:12px;opacity:.65">'+d+' 天未想起 · 权重 '+getMemoryScore(m)+'</div></div><button class="btn" style="flex:none;padding:4px 10px" data-care-resolve="'+E(m.id)+'">标记已解决</button><button class="btn" style="flex:none;padding:4px 10px" data-care-keep="'+E(m.id)+'">保留</button></div>'})}
+  if(stale.length){stale.forEach(function(m){const d=Math.floor((now-(m.lastActivated||m.created||now))/86400000);h+='<div style="display:flex;gap:6px;align-items:flex-start;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.2)"><div style="flex:1;min-width:0"><div style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">'+E(m.title||'（无标题）')+'</div>'+clamp2(m.summary||m.content)+'<div style="font-size:12px;opacity:.65;margin-top:2px">'+d+' 天未想起 · 权重 '+getMemoryScore(m)+'</div></div><button class="btn" style="flex:none;padding:4px 10px" data-care-resolve="'+E(m.id)+'">标记已解决</button><button class="btn" style="flex:none;padding:4px 10px" data-care-keep="'+E(m.id)+'">保留</button></div>'})}
   else h+='<p class="hint" style="margin:2px 0 6px;opacity:.65">暂无候选。高唤醒与「情感」类永不进此清单。</p>';
   h+='<div style="font-weight:600;margin:10px 0 4px">检索自检（假零测试）</div>';
   h+='<button class="btn" style="padding:6px 12px" data-care-test="1">运行自检</button> <span id="mem-care-testout" style="font-size:12px;opacity:.7"></span>';
@@ -24327,18 +24369,19 @@ async function _ibCareRenderD(box){
   const zeroRate=log.length?(log.filter(function(r){return (r.passed||[]).length===0}).length/log.length*100).toFixed(0):0;
   h+='<div style="font-weight:600;margin:10px 0 4px">门槛日志（最近 '+log.length+' 次 · 全空率 '+zeroRate+'%）</div>';
   if(topBlocked.length){h+='<p class="hint" style="margin:2px 0 4px;opacity:.75">被挡次数最多的记忆——该想起的就置顶：</p>';
-    topBlocked.forEach(function(x){h+='<div style="display:flex;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.2)"><div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+E(x.title)+'</div><div style="font-size:12px;opacity:.65">被挡 '+x.n+' 次 · 相关度 '+x.rel+'</div></div><button class="btn" style="flex:none;padding:4px 10px" data-care-pin="'+E(x.id)+'">置顶</button><button class="btn" style="flex:none;padding:4px 10px" data-care-ign="'+E(x.id)+'">忽略</button></div>'})}
+    topBlocked.forEach(function(x){h+='<div style="display:flex;gap:6px;align-items:flex-start;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.2)"><div style="flex:1;min-width:0"><div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">'+E(x.title||'（无标题）')+'</div><div style="font-size:12px;opacity:.65">被挡 '+x.n+' 次 · 相关度 '+x.rel+'</div></div><button class="btn" style="flex:none;padding:4px 10px" data-care-pin="'+E(x.id)+'">置顶</button><button class="btn" style="flex:none;padding:4px 10px" data-care-ign="'+E(x.id)+'">忽略</button></div>'})}
   else h+='<p class="hint" style="margin:2px 0 6px;opacity:.65">暂无决策记录——聊几句后回来看。</p>';
-  /* 嵌入通道 */
+  /* 嵌入通道；v287-d 默认内置服务器硅基流动代理（Key 只在服务器） */
   let emb={enabled:false,base:'',key:'',model:''};try{emb=await _ibEmbCfg()}catch(e){}
-  let embN=0;try{embN=(await dbGetAll('memories')).filter(function(m){return m.emb&&m.emb.length}).length}catch(e){}
-  h+='<div style="font-weight:600;margin:10px 0 4px">语义检索（嵌入通道，默认关）</div>';
-  h+='<p class="hint" style="margin:2px 0 6px;opacity:.75">相关度=词法与语义取高者；接口失败自动降级回词法。已嵌入 '+embN+' 条。</p>';
-  h+='<div style="display:flex;gap:8px;align-items:center;margin:4px 0;flex-wrap:wrap"><label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="mem-care-emb" '+(emb.enabled?'checked':'')+'>启用</label><button class="btn" style="padding:4px 10px" data-care-embtest="1">测试连通性</button><span id="mem-care-embout" style="font-size:12px;opacity:.7"></span></div>';
-  h+='<input id="mem-care-embbase" placeholder="Base URL" value="'+E(emb.base||'')+'" style="width:100%;margin:4px 0;padding:6px 8px;background:rgba(128,128,128,.12);border:1px solid rgba(128,128,128,.3);border-radius:8px;color:inherit">';
-  h+='<input id="mem-care-embkey" placeholder="API Key" value="'+E(emb.key||'')+'" style="width:100%;margin:4px 0;padding:6px 8px;background:rgba(128,128,128,.12);border:1px solid rgba(128,128,128,.3);border-radius:8px;color:inherit">';
-  h+='<input id="mem-care-embmodel" placeholder="嵌入模型" value="'+E(emb.model||'')+'" style="width:100%;margin:4px 0;padding:6px 8px;background:rgba(128,128,128,.12);border:1px solid rgba(128,128,128,.3);border-radius:8px;color:inherit">';
-  h+='<button class="btn" style="padding:6px 12px" data-care-embfill="1">为缺失条目补向量（≤20 条/次）</button>';
+  let embN=0;try{embN=(await dbGetAll('memVectors')).length}catch(e){}
+  try{embN+=(await dbGetAll('memories')).filter(function(m){return m.emb&&m.emb.length}).length}catch(e){}
+  h+='<div style="font-weight:600;margin:10px 0 4px">语义检索（嵌入通道 · 已内置服务器 Key）</div>';
+  h+='<p class="hint" style="margin:2px 0 6px;opacity:.75">开启后相关度=词法与语义取高者。默认走服务器内置硅基流动代理——不用填 Key（密钥只存在服务器，绝不进网页源码）；也可改填任意 OpenAI 兼容 /embeddings 直连。接口失败自动降级回词法，已入库条目不受影响。已嵌入 '+embN+' 条，页面开着时后台每 5 分钟自动补一小批。</p>';
+  h+='<div style="display:flex;gap:8px;align-items:center;margin:4px 0;flex-wrap:wrap"><label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="mem-care-emb" '+(emb.enabled?'checked':'')+'>启用</label><button class="btn" style="padding:4px 10px" data-care-embtest="1">测试连通性</button><button class="btn" style="padding:4px 10px" data-care-embreset="1">恢复内置通道</button><span id="mem-care-embout" style="font-size:12px;opacity:.7"></span></div>';
+  h+='<input id="mem-care-embbase" placeholder="Base URL（内置通道已预填，可改直连）" value="'+E(emb.base||'')+'" style="width:100%;margin:4px 0;padding:6px 8px;background:rgba(128,128,128,.12);border:1px solid rgba(128,128,128,.3);border-radius:8px;color:inherit">';
+  h+='<input id="mem-care-embkey" placeholder="API Key（走内置服务器通道留空即可）" value="'+E(emb.key||'')+'" style="width:100%;margin:4px 0;padding:6px 8px;background:rgba(128,128,128,.12);border:1px solid rgba(128,128,128,.3);border-radius:8px;color:inherit">';
+  h+='<input id="mem-care-embmodel" placeholder="嵌入模型（内置通道已预填）" value="'+E(emb.model||'')+'" style="width:100%;margin:4px 0;padding:6px 8px;background:rgba(128,128,128,.12);border:1px solid rgba(128,128,128,.3);border-radius:8px;color:inherit">';
+  h+='<button class="btn" style="padding:6px 12px" data-care-embfill="1">为缺失条目补向量（批量 16 条/次，一键补齐全库）</button>';
   h+='<div style="height:10px"></div><button class="btn btn-primary" data-care-save="1" style="width:100%">保存门槛设置</button>';
   box.innerHTML=h;
   const closeB=box.querySelector('[data-care-close]');if(closeB)closeB.addEventListener('click',function(){box.style.display='none';box.dataset.open=''});
@@ -24351,8 +24394,9 @@ async function _ibCareRenderD(box){
   const th=box.querySelector('#mem-care-th');if(th)th.addEventListener('input',function(){box.querySelector('#mem-care-thv').textContent=th.value});
   box.querySelectorAll('[data-care-pin]').forEach(function(b){b.addEventListener('click',async function(){try{const o=await dbGet('memories',b.getAttribute('data-care-pin'));if(o){o.pinned=true;await dbPut('memories',o);toast('已置顶（绕过门槛常驻注入）')}}catch(e){}await _ibCareRenderD(box);try{renderMemories();updateMemDashboard()}catch(e){}})});
   box.querySelectorAll('[data-care-ign]').forEach(function(b){b.addEventListener('click',async function(){try{const s=(await dbGet('apiSettings','memCareState'))||{id:'memCareState'};s.dismiss=s.dismiss||{};s.dismiss[b.getAttribute('data-care-ign')]=Date.now();await dbPut('apiSettings',s)}catch(e){}await _ibCareRenderD(box)})});
-  const embtest=box.querySelector('[data-care-embtest]');if(embtest)embtest.addEventListener('click',async function(){const out=box.querySelector('#mem-care-embout');out.textContent='测试中…';try{const c={enabled:true,base:box.querySelector('#mem-care-embbase').value.trim(),key:box.querySelector('#mem-care-embkey').value.trim(),model:box.querySelector('#mem-care-embmodel').value.trim()};if(!c.base||!c.key||!c.model)throw new Error('三项都要填');const v=await _ibEmbGet(c,'连通性测试');out.textContent='连通 ✓ 维度 '+v.length}catch(e){out.textContent='失败：'+String(e&&e.message||e).slice(0,60)}});
-  const embfill=box.querySelector('[data-care-embfill]');if(embfill)embfill.addEventListener('click',async function(){embfill.disabled=true;const out=box.querySelector('#mem-care-embout');try{const c=await _ibEmbCfg();c.enabled=true;c.base=box.querySelector('#mem-care-embbase').value.trim();c.key=box.querySelector('#mem-care-embkey').value.trim();c.model=box.querySelector('#mem-care-embmodel').value.trim();await dbPut('apiSettings',Object.assign({},c,{id:'memEmbedCfg'}));const need=(await dbGetAll('memories')).filter(function(m){return !(m.emb&&m.emb.length)}).slice(0,20);let ok=0;for(const m of need){try{await _ibEmbFill(m);ok++}catch(e){}}out.textContent='本轮补嵌 '+ok+'/'+need.length+' 条'}catch(e){out.textContent='失败：'+String(e&&e.message||e).slice(0,60)}embfill.disabled=false;await _ibCareRenderD(box)});
+  const embtest=box.querySelector('[data-care-embtest]');if(embtest)embtest.addEventListener('click',async function(){const out=box.querySelector('#mem-care-embout');out.textContent='测试中…';try{const c={enabled:true,base:box.querySelector('#mem-care-embbase').value.trim(),key:box.querySelector('#mem-care-embkey').value.trim(),model:box.querySelector('#mem-care-embmodel').value.trim()};if(!c.base||!c.model)throw new Error('Base 和模型要填');if(!c.key&&c.base.indexOf('/api/ib-sync')===-1)throw new Error('直连通道需要填 Key');const v=await _ibEmbGet(c,'连通性测试');out.textContent='连通 ✓ 维度 '+v.length}catch(e){out.textContent='失败：'+String(e&&e.message||e).slice(0,60)}});
+  const embfill=box.querySelector('[data-care-embfill]');if(embfill)embfill.addEventListener('click',async function(){embfill.disabled=true;const out=box.querySelector('#mem-care-embout');try{const c={enabled:true,base:box.querySelector('#mem-care-embbase').value.trim(),key:box.querySelector('#mem-care-embkey').value.trim(),model:box.querySelector('#mem-care-embmodel').value.trim()};if(!c.base||!c.model)throw new Error('Base 和模型要填');if(!c.key&&c.base.indexOf('/api/ib-sync')===-1)throw new Error('直连通道需要填 Key');await dbPut('apiSettings',Object.assign({},c,{id:'memEmbedCfg'}));const have=new Set((await dbGetAll('memVectors')).map(function(x){return x.id}));const todo=(await dbGetAll('memories')).filter(function(m){return m&&m.id&&!have.has(m.id)&&!(m.emb&&m.emb.length)&&!(m.needsReview&&!m.reviewed)});if(!todo.length){out.textContent='没有缺向量的条目';embfill.disabled=false;return}let ok=0;await _ibEmbFillBatch(todo,function(o,d,t){out.textContent='补嵌中 '+d+'/'+t;ok=o});out.textContent='补嵌完成 '+ok+'/'+todo.length}catch(e){out.textContent='失败：'+String(e&&e.message||e).slice(0,60)}embfill.disabled=false;await _ibCareRenderD(box);try{toast('补向量完成')}catch(e){}});
+  const embreset=box.querySelector('[data-care-embreset]');if(embreset)embreset.addEventListener('click',async function(){try{await dbDelete('apiSettings','memEmbedCfg')}catch(e){}await _ibCareRenderD(box);try{toast('已恢复内置服务器通道')}catch(e){}});
   const save=box.querySelector('[data-care-save]');if(save)save.addEventListener('click',async function(){try{const rawRec=(await dbGet('apiSettings','memorySettings'))||{id:'memorySettings'};const v=Object.assign({},rawRec,{gate:!!box.querySelector('#mem-care-gate').checked,floatOn:!!box.querySelector('#mem-care-float').checked,strict:!!box.querySelector('#mem-care-strict').checked,factCheck:!!box.querySelector('#mem-care-fc').checked,relTh:parseFloat(box.querySelector('#mem-care-th').value)||0.15,recentCap:Math.max(1,Math.min(8,parseInt(box.querySelector('#mem-care-rc').value)||3))});await dbPut('apiSettings',v);toast('门槛设置已保存')}catch(e){toast('保存失败：'+String(e&&e.message||e).slice(0,60))}});
 }
 async function _ibCareSelfTestD(){
@@ -24378,9 +24422,11 @@ async function getMemoryContext(apiId,opts){
     const all=await dbGetAll('memories');
     const visible=all.filter(m=>isMemoryVisibleTo(m,apiId,isGroup,groupMemEnabled)&&!(m.needsReview&&!m.reviewed));/* v286-d：待审记忆不注入 */
     if(!visible.length)return '';
-    /* v286-d：可选嵌入通道——查询向量一次，逐条余弦，无向量条目降级回词法 */
+    /* v286-d：可选嵌入通道——查询向量一次，逐条余弦，无向量条目降级回词法；v287-d 向量在本地 memVectors（不同步），旧 m.emb 兜底 */
+    let _vecMap=null;try{_vecMap=new Map((await dbGetAll('memVectors')).map(function(x){return [x.id,x.v]}).filter(function(x){return x[1]&&x[1].length}))}catch(e){_vecMap=null}
+    const _vecOf=function(m){return (_vecMap&&_vecMap.get(m.id))||(m.emb&&m.emb.length?m.emb:null)};
     let qEmb=null;
-    try{const EC=await _ibEmbCfg();if(EC.enabled&&EC.base&&EC.key&&EC.model&&userMsg)qEmb=await _ibEmbGet(EC,String(userMsg).slice(0,600))}catch(e){qEmb=null}
+    try{const EC=await _ibEmbCfg();if(_ibEmbOk(EC)&&userMsg)qEmb=await _ibEmbGet(EC,String(userMsg).slice(0,600))}catch(e){qEmb=null}
     /* 语义关键词匹配 */
     const keywords=_extractKeywords(userMsg);
     const scored=visible.map(m=>{
@@ -24404,7 +24450,7 @@ async function getMemoryContext(apiId,opts){
     const relMap={};
     if(gateOn&&terms.length){
       visible.forEach(m=>{relMap[m.id]=_ibRelScore(m,terms)});
-      if(qEmb){visible.forEach(m=>{if(m.emb&&m.emb.length){try{const c=_ibEmbCos(qEmb,m.emb);const sn=_ibSimNorm(c);if(sn>relMap[m.id])relMap[m.id]=sn}catch(e){}}})}
+      if(qEmb){visible.forEach(m=>{const ev=_vecOf(m);if(ev&&ev.length===qEmb.length){try{const c=_ibEmbCos(qEmb,ev);const sn=_ibSimNorm(c);if(sn>relMap[m.id])relMap[m.id]=sn}catch(e){}}})}
       const gated=scored.filter(m=>!m.pinned&&(relMap[m.id]||0)>=relTh);
       const r7=[],rest=[];gated.forEach(m=>{((m.created||0)>=W7?r7:rest).push(m)});
       chosen=rest.concat(r7.slice(0,recentCap)).slice(0,8);
