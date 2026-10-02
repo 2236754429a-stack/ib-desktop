@@ -13450,12 +13450,15 @@ function _mdRenderHtml(text,partial){
     if(ulm){closeBq();if(!inList||listType!=='ul'){closeList();html.push('<ul>');inList=true;listType='ul'}
       html.push('<li>'+inlineRender(ulm[2])+'</li>');continue}
     /* 有序列表 */
-    var olm=L.match(/^(\s*)\d+\.\s+(.*)/);
-    if(olm){closeBq();if(!inList||listType!=='ol'){closeList();html.push('<ol>');inList=true;listType='ol'}
-      html.push('<li>'+inlineRender(olm[2])+'</li>');continue}
+    var olm=L.match(/^(\s*)(\d+)\.\s+(.*)/);
+    if(olm){closeBq();
+      if(!inList||listType!=='ol'){closeList();var _ols=parseInt(olm[2],10);html.push(_ols===1?'<ol>':'<ol start="'+_ols+'">');inList=true;listType='ol'}/* v312-p：有序列表尊重原文起始编号 */
+      html.push('<li>'+inlineRender(olm[3])+'</li>');continue}
     /* 普通行 */
+    if(L.trim()===''){/* v312-p：空行不再拆散有序列表——下一非空行仍是有序项时保持连续（否则每项都被重排为 1） */
+      if(inList&&listType==='ol'){var pk=i;while(pk+1<lines.length&&!lines[pk+1].trim())pk++;if(pk+1<lines.length&&/^\s*\d+\.\s+/.test(lines[pk+1])){html.push('');continue}}
+      closeList();html.push('');continue}
     closeList();
-    if(L.trim()===''){html.push('');continue}
     html.push('<p>'+inlineRender(L)+'</p>');
   }
   /* 收尾 */
