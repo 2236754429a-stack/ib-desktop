@@ -6095,7 +6095,7 @@ body:not(.theme-infernal) .ibr-col .ibr-host .chat-typing .typing-sec{opacity:0.
     <div class="mem-section-title">
       <div><span>Memories</span><small>The Constellation Index</small></div>
       <div style="display:flex;gap:8px">
-        <button class="btn" id="mem-care-d" onclick="_ibCareOpenD()">记忆养护</button><button class="btn" onclick="exportMemories()">导出记忆</button>
+        <button class="btn" onclick="exportMemories()">导出记忆</button>
         <button class="btn" onclick="importMemoriesFile()">导入记忆</button>
         <button class="btn" onclick="openAmSummary()">记忆总结</button>
         <button class="btn btn-primary" onclick="openMemoryModal()">+ 新记忆</button>
@@ -16284,10 +16284,9 @@ const DEFAULT_MEM_BUDGET=15000,DEFAULT_MEM_CONTENT_LEN=4000;
 async function getMemorySettings(){
   try{
     const cfg=await dbGet('apiSettings','memorySettings');
-    var _g={gate:true,relTh:0.15,recentCap:3,floatOn:true,strict:false,factCheck:true};/* v286-d */
-    if(!cfg)return Object.assign({budget:DEFAULT_MEM_BUDGET,contentLen:DEFAULT_MEM_CONTENT_LEN,memStreaming:false},_g);
-    return Object.assign({budget:cfg.budget||DEFAULT_MEM_BUDGET,contentLen:cfg.contentLen||DEFAULT_MEM_CONTENT_LEN,memStreaming:!!cfg.memStreaming},{gate:cfg.gate!==undefined?!!cfg.gate:true,relTh:cfg.relTh!=null?Number(cfg.relTh):0.15,recentCap:cfg.recentCap||3,floatOn:cfg.floatOn!==undefined?!!cfg.floatOn:true,strict:!!cfg.strict,factCheck:cfg.factCheck!==undefined?!!cfg.factCheck:true});
-  }catch(e){return Object.assign({budget:DEFAULT_MEM_BUDGET,contentLen:DEFAULT_MEM_CONTENT_LEN,memStreaming:false},_g)}
+    if(!cfg)return{budget:DEFAULT_MEM_BUDGET,contentLen:DEFAULT_MEM_CONTENT_LEN,memStreaming:false};
+    return{budget:cfg.budget||DEFAULT_MEM_BUDGET,contentLen:cfg.contentLen||DEFAULT_MEM_CONTENT_LEN,memStreaming:!!cfg.memStreaming};
+  }catch(e){return{budget:DEFAULT_MEM_BUDGET,contentLen:DEFAULT_MEM_CONTENT_LEN,memStreaming:false}}
 }
 /* ── 记忆设置「自定义」辅助 ── */
 function _memSettingVal(id,def,min,max){
@@ -16964,7 +16963,7 @@ function _askGlobalRestoreUI(){_askGCache=null;_askGlobalGet().then(function(v){
 const _ASK_INSTR_BLOCK='\n\n【选项卡】当用户需要在几个明确的选项中做选择时，可输出：\n<ws_ask title="问题文本">\nA. 选项一\nB. 选项二\n</ws_ask>\n规则：title 为问题本身；正文每行一个选项（2-6 个）；每条回复最多 1 个选项卡；标签会渲染成可点选的卡片，用户点选某项或自行输入后，该内容会作为下一条用户消息发给你。选项卡之外的正文照常书写，不要在文字里复述选项。';/* v88：删逐模块主动性措辞（全开语义漂移第二刀） */
 
 /* ═══ 进阶指令（记忆库检索 / 日历写入）：常量块随开关整块注入，结果只挂末条用户消息，前缀不动 ═══ */
-const _MEMSEARCH_INSTR_BLOCK='\n\n【记忆库检索】你可以检索记忆库来核实过往信息。\n用法：<ws_mem_search q="关键词" />\n说明：\n- q 填 1–4 个关键词（空格分隔），系统在对你可见的记忆条目与你的记忆档案中匹配，命中内容在下一条消息回传给你。\n- 在对话涉及过往的人、事件或约定时调用。不确定记过没有时，也可以用来核实。\n- 若未命中，系统会用最长的关键词自动重检一次并在结果中注明；仍未命中就是记忆库里真的没有，不要猜。\n- 不要编造检索结果——等系统回传。';
+const _MEMSEARCH_INSTR_BLOCK='\n\n【记忆库检索】你可以检索记忆库来核实过往信息。\n用法：<ws_mem_search q="关键词" />\n说明：\n- q 填 1–4 个关键词（空格分隔），系统在对你可见的记忆条目与你的记忆档案中匹配，命中内容在下一条消息回传给你。\n- 在对话涉及过往的人、事件或约定时调用。不确定记过没有时，也可以用来核实。\n- 不要编造检索结果——等系统回传。';
 const _VOICEMSG_TONE_NOTE='\n\n【语音消息】语音消息前缀方括号内的声学语气参考是本机对这段录音的声学摘要，供你感知对方语气，自然回应即可，不要复述分析数据。';
 const _CALWRITE_INSTR_BLOCK='\n\n【日历写入】你可以替对方管理日历事项，每条回复最多 2 次。\n标签：\n<ws_cal_list/>\n<ws_cal_add kind="类型" date="YYYY-MM-DD" title="标题" end="YYYY-MM-DD" note="备注" />\n<ws_cal_edit id="事项id" date="新日期" title="新标题" note="新备注" />\n<ws_cal_del id="事项id" />\n<ws_cal_meet date="YYYY-MM-DD" />\n字段说明：\n- ws_cal_list 查询你有权限看到的全部日程，第一条为与对方的相遇纪念日，逐条附 id，结果在下一条消息回传。\n- kind：anniv（纪念日）、birthday（生日）、plan（计划）、memo（记录）。纪念日与生日按年重复，计划与记录为单次。\n- date：必填，YYYY-MM-DD 格式。\n- title：必填，事项标题（40字内）。\n- end：选填，仅 plan / memo 有效，标记结束日期。\n- note：选填，备注（120字内），会随事项一并提供给有权限的 AI。\n- id：编辑或删除时必填，先用 <ws_cal_list/> 查询获取（或取自上一轮回传），不要臆造。\n- ws_cal_meet 用于更正你与对方的相遇纪念日，仅在对方明确告知日期时使用。\n执行结果在下一条消息回传给你。';
 var _advCache=null;
@@ -17888,21 +17887,7 @@ async function _ibMemWriteExec(cfg,op,n){
     visibility:'only',visibleTo:[cfg.id],excludeFrom:[],
     rawSource:'AI写入',sourceId:'',activationCount:0,created:Date.now(),lastActivated:Date.now(),
     createdBy:cfg.id,createdByName:(cfg.nickname||cfg.model||'AI'),editedByUser:false};
-  try{/* v286-d：引语回源，原文=该 TA 最近 40 条消息 */
-    let _src='';try{const _am=(await dbGetAll('chatMessages')).filter(function(m){return m.friendId===cfg.id}).sort(function(a,b){return (a.timestamp||0)-(b.timestamp||0)}).slice(-40);_src=_am.map(function(m){return String(m.content||'')}).join(' ')}catch(e){}
-    if(_src){const _vq=_ibVerifyQuotes(txt+' '+(sm9||''),_src);if(_vq.bad.length){mem.needsReview=true;mem.reviewed=false;mem.reviewNote='有 '+_vq.bad.length+'/'+_vq.total+' 处引语未在最近对话核对到（如「'+String(_vq.bad[0]).slice(0,30)+'…」），确认前不注入对话'}}
-  }catch(e){}
   try{await dbPut('memories',mem)}catch(e){return{type:'mem_write',ok:false,reason:'写入本地数据库失败：'+String(e&&e.message||e).slice(0,80)}}
-  (async function(){try{/* v286-d：异步事实核查（不阻塞回执） */
-    const _ms0=await getMemorySettings();if(_ms0.factCheck===false||!cfg.apiKey)return;
-    let _src='';try{const _am=(await dbGetAll('chatMessages')).filter(function(m){return m.friendId===cfg.id}).sort(function(a,b){return (a.timestamp||0)-(b.timestamp||0)}).slice(-40);_src=_am.map(function(m){return String(m.content||'')}).join(' ')}catch(e){}
-    if(!_src)return;
-    const _fr=await callApi(cfg,'【记忆条目】\n标题：'+title+'\n内容：'+txt+'\n\n【最近对话】\n'+_src.slice(-4000)+'\n\n逐句检查【记忆条目】中每句事实性陈述能否被【最近对话】支持（同义改写算支持，对话里没有或对不上的算不支持）。只输出 JSON：{"verdict":"pass"} 或 {"verdict":"fail","bad":["失实的句子",…]}');
-    let _ft=String(_fr&&typeof _fr==='object'?(_fr.t||''):(_fr||''));
-    const _fm=_ft.match(/\{[\s\S]*\}/);
-    if(_fm){const _fj=JSON.parse(_fm[0]);if(_fj&&_fj.verdict==='fail'&&Array.isArray(_fj.bad)&&_fj.bad.length){const o=await dbGet('memories',mem.id);if(o&&!o.reviewed){o.needsReview=true;o.reviewed=false;o.reviewNote='事实核查：'+_fj.bad.length+' 处陈述未获对话支持（如「'+String(_fj.bad[0]).slice(0,30)+'…」），确认前不注入对话';await dbPut('memories',o);toast('一条记忆未通过事实核查，已转入待审')}}}
-  }catch(e){}})();
-  try{_ibEmbFill(mem)}catch(e){}
   try{if(typeof currentPage!=='undefined'&&currentPage==='memory'){renderMemories();updateMemDashboard()}}catch(e){}
   try{_wsPendingOpFeedback.push({actor:(cfg.nickname||cfg.model||'AI'),text:'已写入记忆库 ·「'+title+'」（仅你可见；用户可在 Memory 页查看与编辑）。'})}catch(e){}
   return{type:'mem_write',ok:true,title:title,body:txt};
@@ -18051,7 +18036,7 @@ async function _ibMemSearchExec(cfg,q){
   if(!sc0.memOk)return{ok:false,label:'记忆库检索未执行',detail:'当前会话已关闭记忆读取。'};
   var all=[];try{all=await dbGetAll('memories')}catch(e){}
   /* 与 getMemoryContext 用同一个判定，不再就地手写（原实现漏判 private） */
-  var vis=all.filter(function(m){return isMemoryVisibleTo(m,fid,sc0.isGroup,sc0.groupMemEnabled)&&!(m.needsReview&&!m.reviewed)});/* v286-d：待审不进检索 */
+  var vis=all.filter(function(m){return isMemoryVisibleTo(m,fid,sc0.isGroup,sc0.groupMemEnabled)});
   /* 记忆档案（Auto Memory）跟随该 AI 的 autoMem 开关；关着就不该被检索出来 */
   var ams=[];
   if(typeof amEnabled==='function'?amEnabled(cfg):!!(cfg&&cfg.autoMem)){
@@ -18061,20 +18046,16 @@ async function _ibMemSearchExec(cfg,q){
   var docs=[];
   vis.forEach(function(m){var t=[m.title,m.content,m.summary,(m.tags||[]).join(' ')].filter(Boolean).join(' ');docs.push({src:'记忆库',x:(m.title?m.title+'：':'')+String(m.content||m.summary||''),low:String(t).toLowerCase(),lt:String((m.tags||[]).join(' ')).toLowerCase(),ls:String((m.title||'')+' '+(m.summary||'')).toLowerCase(),lb:String(m.content||'').toLowerCase()})});/* v128：分字段 */
   (ams||[]).forEach(function(e){var lo=String(e.content||'').toLowerCase();docs.push({src:'记忆档案',x:String(e.content||''),low:lo,lt:'',ls:lo,lb:''})});
+  var terms=[],seen9={};
+  kws.forEach(function(k){var kl=String(k).toLowerCase();if(!seen9[kl]){seen9[kl]=1;terms.push({t:kl,w:3})}
+    (kl.match(/[\u4e00-\u9fff]{2,}/g)||[]).forEach(function(run){for(var i9=0;i9+2<=run.length;i9++){var bg=run.slice(i9,i9+2);if(!seen9[bg]){seen9[bg]=1;terms.push({t:bg,w:1})}}})});
   function occ9(h,n){var c=0,i9=0;while((i9=h.indexOf(n,i9))!==-1){c++;i9+=n.length}return c}
   var N9=docs.length||1,avg9=0;docs.forEach(function(d){avg9+=d.low.length});avg9=avg9/N9||1;
-  var scan9=function(kwList){var terms=[],seen9={};kwList.forEach(function(k){var kl=String(k).toLowerCase();if(!seen9[kl]){seen9[kl]=1;terms.push({t:kl,w:3})}
-    (kl.match(/[\u4e00-\u9fff]{2,}/g)||[]).forEach(function(run){for(var i9=0;i9+2<=run.length;i9++){var bg=run.slice(i9,i9+2);if(!seen9[bg]){seen9[bg]=1;terms.push({t:bg,w:1})}}})});
-    terms.forEach(function(T){var df=0;docs.forEach(function(d){if(d.low.indexOf(T.t)!==-1)df++});T.idf=Math.log(1+(N9-df+0.5)/(df+0.5))});
-    var hits=[];docs.forEach(function(d){var s9=0;terms.forEach(function(T){var tf=('lb' in d)?(3*occ9(d.lt,T.t)+2*occ9(d.ls,T.t)+occ9(d.lb,T.t)):occ9(d.low,T.t);/* v128：标签 ×3、标题概述 ×2、正文 ×1 */if(tf)s9+=T.w*T.idf*(tf*2.5)/(tf+1.5*(0.25+0.75*d.low.length/avg9))});if(s9>0)hits.push({n:s9,src:d.src,x:d.x})});
-    hits.sort(function(a,b){return b.n-a.n});return hits};
-  var hits=scan9(kws),retried=null;
-  if(!hits.length&&kws.length>1){/* v286-d：零命中自动退回最长关键词重检（假零比真零更坏） */
-    var lk='';kws.forEach(function(k){if(k.length>lk.length)lk=k});
-    if(lk){hits=scan9([lk]);if(hits.length)retried=lk}
-  }
-  hits=hits.slice(0,8);
-  if(!hits.length)return{ok:true,label:'检索记忆库 ·「'+kws.join(' ')+'」· 无命中',detail:'检索范围：对你可见的记忆库条目与你的记忆档案。没有命中的条目。'+(retried?'（已自动只用「'+retried+'」重检过，仍无命中）':'（可换更短的关键词再试）')};
+  terms.forEach(function(T){var df=0;docs.forEach(function(d){if(d.low.indexOf(T.t)!==-1)df++});T.idf=Math.log(1+(N9-df+0.5)/(df+0.5))});
+  var hits=[];
+  docs.forEach(function(d){var s9=0;terms.forEach(function(T){var tf=('lb' in d)?(3*occ9(d.lt,T.t)+2*occ9(d.ls,T.t)+occ9(d.lb,T.t)):occ9(d.low,T.t);/* v128：标签 ×3、标题概述 ×2、正文 ×1 */if(tf)s9+=T.w*T.idf*(tf*2.5)/(tf+1.5*(0.25+0.75*d.low.length/avg9))});if(s9>0)hits.push({n:s9,src:d.src,x:d.x})});
+  hits.sort(function(a,b){return b.n-a.n});hits=hits.slice(0,8);
+  if(!hits.length)return{ok:true,label:'检索记忆库 ·「'+kws.join(' ')+'」· 无命中',detail:'检索范围：对你可见的记忆库条目与你的记忆档案。没有命中的条目。'};
   var CAP=20000,used=0,lines=[],dropped=0;
   hits.forEach(function(h){var line='· ['+h.src+'] '+h.x;if(used+line.length<=CAP||!lines.length){lines.push(line);used+=line.length}else dropped++});
   if(dropped)lines.push('（另有 '+dropped+' 条命中因超出单次回传上限未展示，可换更精确的关键词再检索）');
@@ -24228,138 +24209,9 @@ async function apiDeleteDay(btn,fid,k){
   bs[1].onclick=function(){renderApiDayList(fid)};
 }
 
-/* ===== v285-d/v286-d 记忆引擎升级（门槛制召回/引语回源/养护/假零自检/嵌入通道） =====
-   与手机端 v285-p/v286-p 同源；借鉴 WrenWen/Ombre Brain/Nocturne。纯本地计算，向后兼容。 */
-function _ibNormVerify(s){return String(s||'').replace(/[\s\u3000]+/g,'').replace(/[，。！？；：、,.!?;:~～·…—\-()（）\[\]【】{}“”‘’"']/g,'').toLowerCase()}
-function _ibExtractQuotes(s){const out=[];const re=/[「『]([^「『」』]{3,80})[」』]|[\u201c"]([^\u201d"]{3,80})[\u201d"]/g;let m;while((m=re.exec(String(s||'')))!==null){out.push(m[1]||m[2])}return out}
-function _ibVerifyQuotes(text,source){const S=_ibNormVerify(source);const qs=_ibExtractQuotes(text);const bad=qs.filter(function(q){return S.indexOf(_ibNormVerify(q))===-1});return {total:qs.length,bad:bad}}
-function _ibGateTerms(msg,vis){
-  const cleaned=String(msg||'').replace(/[\[\]()（）【】「」『』《》、，。！？；：\s]/g,' ').trim();
-  const cand=[];const seen={};
-  (cleaned.match(/[a-zA-Z]{2,}/g)||[]).forEach(function(w){const k=w.toLowerCase();if(!seen[k]&&k.length>=3){seen[k]=1;cand.push(k)}});
-  const zh=cleaned.replace(/[a-zA-Z0-9\s]+/g,'');
-  for(let i=0;i<zh.length-1;i++){const b=zh.slice(i,i+2);if(!seen[b]){seen[b]=1;cand.push(b)}}
-  const hay=vis.map(function(m){return String((m.tags||[]).join(' ')+' '+(m.title||'')+' '+(m.summary||'')+' '+(m.domain||'')+' '+(m.content||'')).toLowerCase()});
-  const N=hay.length||1;
-  const scored=cand.map(function(t){let df=0;hay.forEach(function(h){if(h.indexOf(t)!==-1)df++});return {t:t,df:df,idf:Math.log(1+(N-df+0.5)/(df+0.5))}});
-  /* df=0 的词对召回零贡献却稀释分母——剔除（手机端单测抓到的坑） */
-  const live=scored.filter(function(T){return T.df>0});
-  live.sort(function(a,b){return b.idf-a.idf});
-  return live.slice(0,12);
-}
-function _ibRelScore(m,terms){
-  if(!terms||!terms.length)return 0;
-  const strong=String((m.tags||[]).join(' ')+' '+(m.title||'')+' '+(m.summary||'')+' '+(m.domain||'')).toLowerCase();
-  const body=String(m.content||'').toLowerCase();
-  let wSum=0,wHit=0;
-  terms.forEach(function(T){wSum+=T.idf;if(strong.indexOf(T.t)!==-1)wHit+=T.idf;else if(body.indexOf(T.t)!==-1)wHit+=T.idf*0.45});
-  return wSum>0?wHit/wSum:0;
-}
-async function _ibEmbCfg(){try{const s=await dbGet('apiSettings','memEmbedCfg');return Object.assign({enabled:false,base:'',key:'',model:''},s||{})}catch(e){return {enabled:false,base:'',key:'',model:''}}}
-const _ibEmbCache=new Map();
-async function _ibEmbGet(EC,text){
-  const key=(EC.model||'')+'|'+String(text).slice(0,600);
-  if(_ibEmbCache.has(key))return _ibEmbCache.get(key);
-  const r=await fetch(String(EC.base).replace(/\/+$/,'')+'/embeddings',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+EC.key},body:JSON.stringify({model:EC.model,input:[String(text).slice(0,600)]})});
-  if(!r.ok)throw new Error('embeddings HTTP '+r.status);
-  const j=await r.json();const v=j&&j.data&&j.data[0]&&j.data[0].embedding;
-  if(!v||!v.length)throw new Error('embeddings 返回为空');
-  _ibEmbCache.set(key,v);return v;
-}
-function _ibEmbCos(a,b){let d=0,na=0,nb=0;const n=Math.min(a.length,b.length);for(let i=0;i<n;i++){d+=a[i]*b[i];na+=a[i]*a[i];nb+=b[i]*b[i]}if(!na||!nb)return 0;return d/Math.sqrt(na*nb)}
-function _ibSimNorm(cos){return Math.max(0,Math.min(1,(cos-0.25)/0.55))}
-async function _ibEmbFill(mem){try{const EC=await _ibEmbCfg();if(!EC.enabled||!EC.base||!EC.key||!EC.model)return;if(mem.emb&&mem.emb.length)return;const v=await _ibEmbGet(EC,(mem.title||'')+' '+(mem.summary||'')+' '+String(mem.content||'').slice(0,800));if(v&&v.length){const o=await dbGet('memories',mem.id);if(o&&!o.emb){o.emb=v;o.embM=EC.model;await dbPut('memories',o)}}}catch(e){}}
-async function _ibGateLogGet(){try{const s=await dbGet('apiSettings','memGateLog');return (s&&s.items)||[]}catch(e){return[]}}
-async function _ibGateLogPush(rec){try{const s=(await dbGet('apiSettings','memGateLog'))||{id:'memGateLog',items:[]};const items=(s.items||[]);items.push(rec);while(items.length>200)items.shift();await dbPut('apiSettings',{id:'memGateLog',items:items})}catch(e){}}
-async function _ibCareBadge(){try{let all=[];try{all=await dbGetAll('memories')}catch(e){}const n=all.filter(function(m){return m.needsReview&&!m.reviewed}).length;const b=document.getElementById('mem-care-d');if(!b)return;b.textContent=n?('记忆养护 ·'+n):'记忆养护';b.style.fontWeight=n?'700':''}catch(e){}}
-async function _ibCareOpenD(){
-  let box=document.getElementById('mem-care-ov');
-  if(!box){box=document.createElement('div');box.id='mem-care-ov';box.style.cssText='position:fixed;top:0;right:0;bottom:0;width:460px;max-width:94vw;background:rgba(11,18,34,.97);color:#e8eefc;z-index:99999;overflow-y:auto;padding:18px;box-shadow:-14px 0 46px rgba(0,0,0,.5);font-size:14px;line-height:1.5;display:none';document.body.appendChild(box)}
-  if(box.style.display!=='block'){box.style.display='block';await _ibCareRenderD(box)}else{box.style.display='none'}
-}
-async function _ibCareRenderD(box){
-  const ms=await getMemorySettings();
-  let all=[];try{all=await dbGetAll('memories')}catch(e){}
-  const now=Date.now();
-  const review=all.filter(function(m){return m.needsReview&&!m.reviewed});
-  let dis={};try{const s=await dbGet('apiSettings','memCareState');dis=(s&&s.dismiss)||{}}catch(e){}
-  const stale=all.filter(function(m){return !m.pinned&&!(m.needsReview&&!m.reviewed)&&!m.resolved&&(m.arousal||0)<0.7&&m.domain!=='情感'&&((now-(m.lastActivated||m.created||now))/86400000)>120&&(m.activationCount||0)<=2&&!dis[m.id]}).sort(function(a,b){return (a.lastActivated||0)-(b.lastActivated||0)}).slice(0,10);
-  let lastDigest=0;try{const s2=await dbGet('apiSettings','memCareState');lastDigest=(s2&&s2.lastDigest)||0}catch(e){}
-  const changed=all.filter(function(m){return (m.created||0)>lastDigest}).length;
-  const E=typeof esc==='function'?esc:function(s){return String(s==null?'':s)};
-  let h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="font-size:16px">记忆养护</b><button class="btn" style="padding:2px 10px" data-care-close="1">关闭</button></div>';
-  h+='<p class="hint" style="opacity:.65;margin:0 0 8px">销账只许建议，绝不自动执行（WrenWen 纪律）</p>';
-  h+='<div style="font-weight:600;margin:6px 0 4px">待审记忆（'+review.length+'）</div>';
-  if(review.length){review.slice(0,10).forEach(function(m){h+='<div style="display:flex;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.2)"><div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+E(m.title)+'</div><div style="font-size:12px;opacity:.65;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+E(m.reviewNote||'含未核实引语')+'</div></div><button class="btn" style="flex:none;padding:4px 10px" data-care-ok="'+E(m.id)+'">确认无误</button><button class="btn" style="flex:none;padding:4px 10px" data-care-del="'+E(m.id)+'">删除</button></div>'})}
-  else h+='<p class="hint" style="margin:2px 0 6px;opacity:.65">没有待审条目。AI 写下的引语会逐字回源核对，对不上的先压在这里等你确认。</p>';
-  h+='<div style="font-weight:600;margin:10px 0 4px">做梦（Ombre 精神）</div>';
-  h+='<p class="hint" style="margin:2px 0 6px;opacity:.75">自上次做梦以来新增 <b>'+changed+'</b> 条。变动攒多了去「记忆总结」消化一次。</p>';
-  h+='<button class="btn" style="padding:6px 12px" data-care-dream="1">记下这次做梦</button>';
-  h+='<div style="font-weight:600;margin:10px 0 4px">归档建议（'+stale.length+'）</div>';
-  if(stale.length){stale.forEach(function(m){const d=Math.floor((now-(m.lastActivated||m.created||now))/86400000);h+='<div style="display:flex;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.2)"><div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+E(m.title)+'</div><div style="font-size:12px;opacity:.65">'+d+' 天未想起 · 权重 '+getMemoryScore(m)+'</div></div><button class="btn" style="flex:none;padding:4px 10px" data-care-resolve="'+E(m.id)+'">标记已解决</button><button class="btn" style="flex:none;padding:4px 10px" data-care-keep="'+E(m.id)+'">保留</button></div>'})}
-  else h+='<p class="hint" style="margin:2px 0 6px;opacity:.65">暂无候选。高唤醒与「情感」类永不进此清单。</p>';
-  h+='<div style="font-weight:600;margin:10px 0 4px">检索自检（假零测试）</div>';
-  h+='<button class="btn" style="padding:6px 12px" data-care-test="1">运行自检</button> <span id="mem-care-testout" style="font-size:12px;opacity:.7"></span>';
-  h+='<div style="font-weight:600;margin:10px 0 4px">门槛制召回设置</div>';
-  h+='<p class="hint" style="margin:2px 0 6px;opacity:.75">相关度门槛（0.05 宽松 ～ 0.35 严格，默认 0.15）：低于门槛不注入——宁缺勿凑。</p>';
-  h+='<div style="display:flex;gap:8px;align-items:center"><input type="range" min="0.05" max="0.35" step="0.01" value="'+(Number(ms.relTh)||0.15)+'" id="mem-care-th" style="flex:1"><b id="mem-care-thv">'+(Number(ms.relTh)||0.15)+'</b></div>';
-  h+='<div style="display:flex;gap:14px;margin-top:6px;flex-wrap:wrap">'
-    +'<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="mem-care-gate" '+(ms.gate!==false?'checked':'')+'>开门槛</label>'
-    +'<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="mem-care-float" '+(ms.floatOn!==false?'checked':'')+'>全空给浮现</label>'
-    +'<label style="display:flex;gap:4px;align-items:center">近7天≤ <input type="number" id="mem-care-rc" value="'+(parseInt(ms.recentCap)||3)+'" min="1" max="8" style="width:52px"> 条</label>'
-    +'<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="mem-care-strict" '+(ms.strict?'checked':'')+'>严格</label>'
-    +'<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="mem-care-fc" '+(ms.factCheck!==false?'checked':'')+'>事实核查</label>'
-    +'</div>';
-  /* 门槛日志 */
-  const log=await _ibGateLogGet();
-  const agg={};
-  log.forEach(function(r){(r.blocked||[]).forEach(function(b){const k=b.id;agg[k]=agg[k]||{id:k,title:b.title,rel:b.rel,n:0};agg[k].n++})});
-  const topBlocked=Object.values(agg).sort(function(a,b){return b.n-a.n}).slice(0,8);
-  const zeroRate=log.length?(log.filter(function(r){return (r.passed||[]).length===0}).length/log.length*100).toFixed(0):0;
-  h+='<div style="font-weight:600;margin:10px 0 4px">门槛日志（最近 '+log.length+' 次 · 全空率 '+zeroRate+'%）</div>';
-  if(topBlocked.length){h+='<p class="hint" style="margin:2px 0 4px;opacity:.75">被挡次数最多的记忆——该想起的就置顶：</p>';
-    topBlocked.forEach(function(x){h+='<div style="display:flex;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.2)"><div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+E(x.title)+'</div><div style="font-size:12px;opacity:.65">被挡 '+x.n+' 次 · 相关度 '+x.rel+'</div></div><button class="btn" style="flex:none;padding:4px 10px" data-care-pin="'+E(x.id)+'">置顶</button><button class="btn" style="flex:none;padding:4px 10px" data-care-ign="'+E(x.id)+'">忽略</button></div>'})}
-  else h+='<p class="hint" style="margin:2px 0 6px;opacity:.65">暂无决策记录——聊几句后回来看。</p>';
-  /* 嵌入通道 */
-  let emb={enabled:false,base:'',key:'',model:''};try{emb=await _ibEmbCfg()}catch(e){}
-  let embN=0;try{embN=(await dbGetAll('memories')).filter(function(m){return m.emb&&m.emb.length}).length}catch(e){}
-  h+='<div style="font-weight:600;margin:10px 0 4px">语义检索（嵌入通道，默认关）</div>';
-  h+='<p class="hint" style="margin:2px 0 6px;opacity:.75">相关度=词法与语义取高者；接口失败自动降级回词法。已嵌入 '+embN+' 条。</p>';
-  h+='<div style="display:flex;gap:8px;align-items:center;margin:4px 0;flex-wrap:wrap"><label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="mem-care-emb" '+(emb.enabled?'checked':'')+'>启用</label><button class="btn" style="padding:4px 10px" data-care-embtest="1">测试连通性</button><span id="mem-care-embout" style="font-size:12px;opacity:.7"></span></div>';
-  h+='<input id="mem-care-embbase" placeholder="Base URL" value="'+E(emb.base||'')+'" style="width:100%;margin:4px 0;padding:6px 8px;background:rgba(128,128,128,.12);border:1px solid rgba(128,128,128,.3);border-radius:8px;color:inherit">';
-  h+='<input id="mem-care-embkey" placeholder="API Key" value="'+E(emb.key||'')+'" style="width:100%;margin:4px 0;padding:6px 8px;background:rgba(128,128,128,.12);border:1px solid rgba(128,128,128,.3);border-radius:8px;color:inherit">';
-  h+='<input id="mem-care-embmodel" placeholder="嵌入模型" value="'+E(emb.model||'')+'" style="width:100%;margin:4px 0;padding:6px 8px;background:rgba(128,128,128,.12);border:1px solid rgba(128,128,128,.3);border-radius:8px;color:inherit">';
-  h+='<button class="btn" style="padding:6px 12px" data-care-embfill="1">为缺失条目补向量（≤20 条/次）</button>';
-  h+='<div style="height:10px"></div><button class="btn btn-primary" data-care-save="1" style="width:100%">保存门槛设置</button>';
-  box.innerHTML=h;
-  const closeB=box.querySelector('[data-care-close]');if(closeB)closeB.addEventListener('click',function(){box.style.display='none';box.dataset.open=''});
-  box.querySelectorAll('[data-care-ok]').forEach(function(b){b.addEventListener('click',async function(){try{const o=await dbGet('memories',b.getAttribute('data-care-ok'));if(o){o.reviewed=true;await dbPut('memories',o)}}catch(e){}await _ibCareRenderD(box);try{renderMemories();updateMemDashboard()}catch(e){}})});
-  box.querySelectorAll('[data-care-del]').forEach(function(b){b.addEventListener('click',async function(){const id=b.getAttribute('data-care-del');if(b.dataset.armed){try{await dbDelete('memories',id)}catch(e){}await _ibCareRenderD(box);try{renderMemories();updateMemDashboard()}catch(e){}}else{b.dataset.armed='1';b.textContent='再点确认删除';const self=b;setTimeout(function(){self.dataset.armed='';self.textContent='删除'},2500)}})});
-  box.querySelectorAll('[data-care-resolve]').forEach(function(b){b.addEventListener('click',async function(){try{const o=await dbGet('memories',b.getAttribute('data-care-resolve'));if(o){o.resolved=true;await dbPut('memories',o)}}catch(e){}await _ibCareRenderD(box);try{renderMemories();updateMemDashboard()}catch(e){}})});
-  box.querySelectorAll('[data-care-keep]').forEach(function(b){b.addEventListener('click',async function(){try{const s=(await dbGet('apiSettings','memCareState'))||{id:'memCareState'};s.dismiss=s.dismiss||{};s.dismiss[b.getAttribute('data-care-keep')]=Date.now();await dbPut('apiSettings',s)}catch(e){}await _ibCareRenderD(box)})});
-  const dream=box.querySelector('[data-care-dream]');if(dream)dream.addEventListener('click',async function(){try{const s=(await dbGet('apiSettings','memCareState'))||{id:'memCareState'};s.lastDigest=Date.now();await dbPut('apiSettings',s)}catch(e){}toast('已记下这次做梦');await _ibCareRenderD(box)});
-  const test=box.querySelector('[data-care-test]');if(test)test.addEventListener('click',async function(){const out=box.querySelector('#mem-care-testout');out.textContent='检测中…';const r=await _ibCareSelfTestD();out.textContent=r});
-  const th=box.querySelector('#mem-care-th');if(th)th.addEventListener('input',function(){box.querySelector('#mem-care-thv').textContent=th.value});
-  box.querySelectorAll('[data-care-pin]').forEach(function(b){b.addEventListener('click',async function(){try{const o=await dbGet('memories',b.getAttribute('data-care-pin'));if(o){o.pinned=true;await dbPut('memories',o);toast('已置顶（绕过门槛常驻注入）')}}catch(e){}await _ibCareRenderD(box);try{renderMemories();updateMemDashboard()}catch(e){}})});
-  box.querySelectorAll('[data-care-ign]').forEach(function(b){b.addEventListener('click',async function(){try{const s=(await dbGet('apiSettings','memCareState'))||{id:'memCareState'};s.dismiss=s.dismiss||{};s.dismiss[b.getAttribute('data-care-ign')]=Date.now();await dbPut('apiSettings',s)}catch(e){}await _ibCareRenderD(box)})});
-  const embtest=box.querySelector('[data-care-embtest]');if(embtest)embtest.addEventListener('click',async function(){const out=box.querySelector('#mem-care-embout');out.textContent='测试中…';try{const c={enabled:true,base:box.querySelector('#mem-care-embbase').value.trim(),key:box.querySelector('#mem-care-embkey').value.trim(),model:box.querySelector('#mem-care-embmodel').value.trim()};if(!c.base||!c.key||!c.model)throw new Error('三项都要填');const v=await _ibEmbGet(c,'连通性测试');out.textContent='连通 ✓ 维度 '+v.length}catch(e){out.textContent='失败：'+String(e&&e.message||e).slice(0,60)}});
-  const embfill=box.querySelector('[data-care-embfill]');if(embfill)embfill.addEventListener('click',async function(){embfill.disabled=true;const out=box.querySelector('#mem-care-embout');try{const c=await _ibEmbCfg();c.enabled=true;c.base=box.querySelector('#mem-care-embbase').value.trim();c.key=box.querySelector('#mem-care-embkey').value.trim();c.model=box.querySelector('#mem-care-embmodel').value.trim();await dbPut('apiSettings',Object.assign({},c,{id:'memEmbedCfg'}));const need=(await dbGetAll('memories')).filter(function(m){return !(m.emb&&m.emb.length)}).slice(0,20);let ok=0;for(const m of need){try{await _ibEmbFill(m);ok++}catch(e){}}out.textContent='本轮补嵌 '+ok+'/'+need.length+' 条'}catch(e){out.textContent='失败：'+String(e&&e.message||e).slice(0,60)}embfill.disabled=false;await _ibCareRenderD(box)});
-  const save=box.querySelector('[data-care-save]');if(save)save.addEventListener('click',async function(){try{const rawRec=(await dbGet('apiSettings','memorySettings'))||{id:'memorySettings'};const v=Object.assign({},rawRec,{gate:!!box.querySelector('#mem-care-gate').checked,floatOn:!!box.querySelector('#mem-care-float').checked,strict:!!box.querySelector('#mem-care-strict').checked,factCheck:!!box.querySelector('#mem-care-fc').checked,relTh:parseFloat(box.querySelector('#mem-care-th').value)||0.15,recentCap:Math.max(1,Math.min(8,parseInt(box.querySelector('#mem-care-rc').value)||3))});await dbPut('apiSettings',v);toast('门槛设置已保存')}catch(e){toast('保存失败：'+String(e&&e.message||e).slice(0,60))}});
-}
-async function _ibCareSelfTestD(){
-  try{
-    const all=await dbGetAll('memories');const ms=await getMemorySettings();
-    const fakes=['燱瓼','靘竸','瓼靘'];
-    const terms=_ibGateTerms(fakes.join(''),all);
-    let fakeHit=0;all.forEach(function(m){if(_ibRelScore(m,terms)>=(Number(ms.relTh)||0.15))fakeHit++});
-    const review=all.filter(function(m){return m.needsReview&&!m.reviewed}).length;
-    return '假零检查 '+(fakeHit?'未通过（门槛失灵！）':'通过')+' · 库 '+all.length+' 条 · 待审 '+review+' 条 · 门槛 '+(Number(ms.relTh)||0.15)+(ms.gate!==false?'（开）':'（关）');
-  }catch(e){return '自检出错：'+String(e&&e.message||e).slice(0,80)}
-}
 async function getMemoryContext(apiId,opts){
   opts=opts||{};
   const memSettings=await getMemorySettings();
-  const GC=Object.assign({gate:true,relTh:0.15,recentCap:3,floatOn:true,strict:false,factCheck:true},memSettings||{});
   const maxChars=opts.maxChars||memSettings.budget||15000;
   const contentLen=memSettings.contentLen||4000;
   const isGroup=opts.isGroup||false;
@@ -24367,80 +24219,57 @@ async function getMemoryContext(apiId,opts){
   const userMsg=opts.userMessage||'';
   try{
     const all=await dbGetAll('memories');
-    const visible=all.filter(m=>isMemoryVisibleTo(m,apiId,isGroup,groupMemEnabled)&&!(m.needsReview&&!m.reviewed));/* v286-d：待审记忆不注入 */
+    const visible=all.filter(m=>isMemoryVisibleTo(m,apiId,isGroup,groupMemEnabled));
     if(!visible.length)return '';
-    /* v286-d：可选嵌入通道——查询向量一次，逐条余弦，无向量条目降级回词法 */
-    let qEmb=null;
-    try{const EC=await _ibEmbCfg();if(EC.enabled&&EC.base&&EC.key&&EC.model&&userMsg)qEmb=await _ibEmbGet(EC,String(userMsg).slice(0,600))}catch(e){qEmb=null}
     /* 语义关键词匹配 */
     const keywords=_extractKeywords(userMsg);
     const scored=visible.map(m=>{
       const base=getMemoryScore(m);
       const relBoost=m.pinned?1:_calcRelevance(m,keywords);
+      /* 反垄断：连续高频激活的记忆施加疲劳惩罚 */
       let fatigue=1;
       if(!m.pinned&&m.activationCount>5){
         const hoursSinceLast=(Date.now()-(m.lastActivated||m.created))/(1000*60*60);
-        if(hoursSinceLast<2)fatigue=0.7;
+        if(hoursSinceLast<2)fatigue=0.7;/* 2 小时内反复激活 → 降权 */
       }
       const _s=base*relBoost*fatigue;
       return{...m,_score:_s};
     }).sort((a,b)=>b._score-a._score);
-    /* === v285-d 门槛制召回（借鉴 WrenWen）：绝对门槛宁缺勿凑；总上限8；近7天≤3 === */
-    const gateOn=!!(GC.gate&&userMsg);
-    const relTh=Math.max(0.03,Math.min(0.6,Number(GC.relTh)||0.15));
-    const recentCap=Math.max(1,Math.min(8,parseInt(GC.recentCap)||3));
-    const W7=Date.now()-7*86400000;
-    let chosen=[],assoc=null;
-    const terms=userMsg?_ibGateTerms(userMsg,visible):[];
-    const relMap={};
-    if(gateOn&&terms.length){
-      visible.forEach(m=>{relMap[m.id]=_ibRelScore(m,terms)});
-      if(qEmb){visible.forEach(m=>{if(m.emb&&m.emb.length){try{const c=_ibEmbCos(qEmb,m.emb);const sn=_ibSimNorm(c);if(sn>relMap[m.id])relMap[m.id]=sn}catch(e){}}})}
-      const gated=scored.filter(m=>!m.pinned&&(relMap[m.id]||0)>=relTh);
-      const r7=[],rest=[];gated.forEach(m=>{((m.created||0)>=W7?r7:rest).push(m)});
-      chosen=rest.concat(r7.slice(0,recentCap)).slice(0,8);
-      const pool=scored.filter(m=>!m.pinned&&chosen.indexOf(m)===-1&&(relMap[m.id]||0)>=relTh*0.5);
-      if(chosen.length&&pool.length){
-        const sig={};chosen.forEach(m=>{(m.tags||[]).forEach(t=>{sig[String(t).toLowerCase()]=1});if(m.domain)sig[String(m.domain).toLowerCase()]=1});
-        let best=0;pool.forEach(m=>{let ov=0;(m.tags||[]).forEach(t=>{if(sig[String(t).toLowerCase()])ov++});if(sig[String(m.domain||'').toLowerCase()])ov++;if(ov>best){best=ov;assoc=m}});
-      }/* 联想专座：按与已选条目的共振挑，替换旧版随机探索 */
-    }else{
-      chosen=scored.filter(m=>!m.pinned).slice(0,8);/* 浮现道：无用户消息按权重取（Ombre breath 精神） */
-    }
-    /* === 置顶优先 + 主选区 + 探索预算（联想专座） === */
-    const EXPLORE_RATIO=0.15;
+    /* === 置顶优先 + 主选区 + 探索窗口 === */
+    const EXPLORE_RATIO=0.15;/* 预留 15% 预算给探索 */
     const mainBudget=Math.floor(maxChars*(1-EXPLORE_RATIO));
     const exploreBudget=maxChars-mainBudget;
     let ctx='【记忆（系统参考，勿提及此段）】\n';
     let chars=ctx.length;
     let count=0;
     const selected=new Set();
+    /* 置顶记忆优先注入（保证每次都被 AI 看到） */
     const pinned=scored.filter(m=>m.pinned);
+    const unpinned=scored.filter(m=>!m.pinned);
     for(const m of pinned){
       const line=_formatMemLine(m,apiId,contentLen,keywords);
       if(chars+line.length>mainBudget)break;
       ctx+=line;chars+=line.length;count++;selected.add(m.id);
     }
-    for(const m of chosen){
-      if(selected.has(m.id))continue;
+    /* 主选区：剩余预算按分数从高到低填充非置顶记忆 */
+    for(const m of unpinned){
       const line=_formatMemLine(m,apiId,contentLen,keywords);
       if(chars+line.length>mainBudget)break;
       ctx+=line;chars+=line.length;count++;selected.add(m.id);
     }
-    if(gateOn&&!chosen.length&&!GC.strict){const top1=scored.find(m=>!m.pinned);if(top1){const line='（浮现）'+_formatMemLine(top1,apiId,contentLen,keywords);if(chars+line.length<=maxChars){ctx+=line;chars+=line.length;count++;selected.add(top1.id)}}}/* 门槛全空给一条面包屑；严格模式宁缺 */
-    if(assoc&&exploreBudget>50){const line='（联想）'+_formatMemLine(assoc,apiId,contentLen,keywords);if(chars+line.length<=maxChars){ctx+=line;chars+=line.length;count++;selected.add(assoc.id)}}/* 联想专座走探索预算 */
+    /* 探索窗口：从未入选的中低分段随机抽一条 */
+    const remaining=scored.filter(m=>!selected.has(m.id)&&!m.pinned);
+    if(remaining.length&&exploreBudget>50){
+      const pick=remaining[Math.floor(Math.random()*Math.min(remaining.length,10))];
+      const line=_formatMemLine(pick,apiId,contentLen,keywords);
+      if(chars+line.length<=maxChars){ctx+=line;chars+=line.length;count++;selected.add(pick.id)}
+    }
     if(!count)return '';
+    /* 激活计数：被检索到的记忆增加 activationCount */
     for(const id of selected){
       try{
         const orig=await dbGet('memories',id);
         if(orig){orig.activationCount=(orig.activationCount||0)+1;orig.lastActivated=Date.now();await dbPut('memories',orig)}
-      }catch(e){}
-    }
-    /* v286-d 门槛决策日志（环形 200 条） */
-    if(gateOn&&terms.length){
-      try{
-        const blocked=scored.filter(m=>!m.pinned&&chosen.indexOf(m)===-1).sort((a,b)=>(relMap[b.id]||0)-(relMap[a.id]||0)).slice(0,5).map(m=>({id:m.id,rel:+(relMap[m.id]||0).toFixed(2),title:String(m.title||'').slice(0,24)}));
-        _ibGateLogPush({ts:Date.now(),fid:apiId,q:String(userMsg||'').slice(0,80),relTh:relTh,passed:chosen.map(m=>({id:m.id,rel:+(relMap[m.id]||0).toFixed(2)})),blocked:blocked,float:!chosen.length&&count>0});
       }catch(e){}
     }
     return ctx;
@@ -24626,7 +24455,7 @@ async function populateMemApiFilter(){
   if(cur&&[...sel.options].some(o=>o.value===cur))sel.value=cur;
 }
 
-async function renderMemories(){try{if(typeof _ibCareBadge==='function')_ibCareBadge()}catch(e){}/* v286-d */
+async function renderMemories(){
   const all=await dbGetAll('memories');
   try{await _ibMemOneLineRepairD(all)}catch(e){}/* 本轮：导入手机端旧备份后进 Memory 页即清残留 */
   const domainFilter=document.getElementById('mem-filter-domain')?.value||'all';
@@ -25297,10 +25126,7 @@ async function quickCreateMemory(data){
     createdByName:data.createdByName||'',
     editedByUser:false
   };
-  if(data.needsReview){mem.needsReview=true;mem.reviewed=false;mem.reviewNote=data.reviewNote||''}/* v286-d */
-  try{_ibEmbFill(mem)}catch(e){}
   await dbPut('memories',mem);
-  try{if(typeof currentPage!=='undefined'&&currentPage==='memory'){renderMemories();updateMemDashboard()}}catch(e){}
   return mem.id;
 }
 
@@ -25383,23 +25209,8 @@ async function _generateMemoryCore(cfg,prompt,opts){
     const importance=Math.max(1,Math.min(10,parseInt(get('重要性'))||5));
     const resolved=get('是否已解决').includes('是');
     const _v0=get('可见性').includes('私密')?'private':'public';const _so=(_v0==='private');const visibility=_so?'only':_v0;const _vto=_so?[cfg.id]:[];
-    var _nr=false,_nn='';/* v286-d：引语回源 + 事实核查 */
-    try{
-      const _vq=_ibVerifyQuotes((content||'')+' '+(summary||''),prompt);
-      if(_vq.bad.length){_nr=true;_nn='有 '+_vq.bad.length+'/'+_vq.total+' 处引语未在原材料核对到（如「'+String(_vq.bad[0]).slice(0,30)+'…」），确认前不注入对话'}
-    }catch(e){}
-    try{
-      const _ms0=await getMemorySettings();
-      if(_ms0.factCheck!==false&&cfg.apiKey){
-        const _fr=await callApi(cfg,'【记忆条目】\n标题：'+title+'\n内容：'+content+'\n\n【原材料】\n'+String(prompt).slice(-4000)+'\n\n逐句检查【记忆条目】中每句事实性陈述能否被【原材料】支持（同义改写算支持，原材料里没有或对不上的算不支持；感受句只要求原材料里有触发它的话或动作）。只输出 JSON：{"verdict":"pass"} 或 {"verdict":"fail","bad":["失实的句子",…]}');
-        let _ft=String(_fr&&typeof _fr==='object'?(_fr.t||''):(_fr||''));
-        const _fm=_ft.match(/\{[\s\S]*\}/);
-        if(_fm){try{const _fj=JSON.parse(_fm[0]);if(_fj&&_fj.verdict==='fail'&&Array.isArray(_fj.bad)&&_fj.bad.length){_nr=true;_nn='事实核查：'+_fj.bad.length+' 处陈述未获原材料支持（如「'+String(_fj.bad[0]).slice(0,30)+'…」），确认前不注入对话'}}catch(e){}}
-      }
-    }catch(e){/* 核查失败不阻断（OB 降级哲学） */}
-    const _mid=await quickCreateMemory({title,summary,content,source:opts.source||'manual',sourceId:opts.sourceId||'',domain,tags,valence,arousal,importance,resolved,visibility,visibleTo:_vto,
-      createdBy:opts.createdBy||cfg.id,createdByName:opts.createdByName||'',needsReview:_nr,reviewNote:_nn});
-    try{if(!_nr){const _mo=await dbGet('memories',_mid);if(_mo)_ibEmbFill(_mo)}}catch(e){}
+    await quickCreateMemory({title,summary,content,source:opts.source||'manual',sourceId:opts.sourceId||'',domain,tags,valence,arousal,importance,resolved,visibility,visibleTo:_vto,
+      createdBy:opts.createdBy||cfg.id,createdByName:opts.createdByName||''});
     if(_memStreamWasStopped){
       toast('记忆已截断生成：'+title);
     }else{
