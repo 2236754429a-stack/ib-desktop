@@ -24586,23 +24586,23 @@ async function _ibChatEchoBlock(q,fid){/* v288 旧对话回响：从云端原始
     const ac=(typeof AbortController!=='undefined')?new AbortController():null;
     const tm=ac?setTimeout(function(){try{ac.abort()}catch(e){}},8000):null;
     let j=null;
-    try{const r=await fetch(String(c.serverUrl).replace(/\/+$/,'')+'/chat_search',{method:'POST',headers:{'Content-Type':'application/json','X-Sync-Token':c.token},body:JSON.stringify({query:q.slice(0,300),friendId:String(fid),limit:6}),signal:ac?ac.signal:undefined});if(!r.ok)return'';j=await r.json()}
+    try{const r=await fetch(String(c.serverUrl).replace(/\/+$/,'')+'/chat_search',{method:'POST',headers:{'Content-Type':'application/json','X-Sync-Token':c.token},body:JSON.stringify({query:q.slice(0,300),friendId:String(fid),limit:8}),signal:ac?ac.signal:undefined});if(!r.ok)return'';j=await r.json()}
     catch(e){return''}finally{if(tm)clearTimeout(tm)}
     const hits=(j&&j.hits)||[];const seen={};const lines=[];
     for(const h of hits){
       const sn=String(h.snippet||'').replace(/\s+/g,' ').trim();if(!sn)continue;
       const k=sn.slice(0,40);if(seen[k])continue;seen[k]=1;
       let d='';try{const dt=new Date(Number(h.ts)||0);if(!isNaN(dt.getTime()))d=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')}catch(e){}
-      lines.push('- '+(d?'('+d+' · '+(h.role==='user'?'用户':'你')+'说过) ':'')+sn.slice(0,200));
-      if(lines.length>=5)break;
+      lines.push('- '+(d?'('+d+' · '+(h.role==='user'?'用户':'你')+'说过) ':'')+sn.slice(0,240));
+      if(lines.length>=8)break;
     }
     try{/* v314-d2 可观测：聊天记录检索结果记账（命中数+首条片段），养护抽屉「旧对话回响日志」可见 */
       const s=(await dbGet('apiSettings','memEchoLog'))||{id:'memEchoLog',items:[]};const items=s.items||[];
       items.push({ts:Date.now(),q:String(q).slice(0,80),n:lines.length,snip:lines.length?String(lines[0]).replace(/^- /,'').slice(0,110):''});
       while(items.length>20)items.shift();await dbPut('apiSettings',{id:'memEchoLog',items:items})}catch(e){}
-    try{window._ibEchoLastD={q:String(q).slice(0,80),n:lines.length,items:lines.slice(0,5)}}catch(e){}/* v314-d6：本轮回响结果暂存，落库时折进消息记录 → 气泡卡片可见 */
+    try{window._ibEchoLastD={q:String(q).slice(0,80),n:lines.length,items:lines}}catch(e){}/* v314-d11：卡片携带全部命中（最多 8 条），TA 只注入前 6 条 *//* v314-d6：本轮回响结果暂存，落库时折进消息记录 → 气泡卡片可见 */
     if(!lines.length)return'';
-    return '【旧对话回响（系统参考，勿提及此段）】以下是从过往原始聊天记录里检索到的相关片段，帮你想起对话源头：\n'+lines.join('\n');
+    return '【旧对话回响（系统参考，勿提及此段）】以下是从过往原始聊天记录里检索到的相关片段，帮你想起对话源头：\n'+lines.slice(0,6).join('\n');
   }catch(e){return''}
 }
 async function getMemoryContext(apiId,opts){
