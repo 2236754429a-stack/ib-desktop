@@ -8286,6 +8286,19 @@ i would like the room to be enough.
 <script src="kelivo-import.js"></script>
 <script>
 const DB_NAME='InternalBeyondDB',DB_VER=16;let db;/* v287-d：+memVectors（记忆向量，仅本地不进同步），两端同轮 15→16 */
+/* v314 版本自检：部署新版后旧页面自动发现并刷新一次（ib-ver.txt 随部署同步更新；每标签只自动刷一次防死循环） */
+(function(){
+  var B='20261003-var1';
+  try{
+    var _chk=function(){fetch((location.pathname.replace(/[^/]*$/,'')||'./')+'ib-ver.txt?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():''}).then(function(v){
+      v=String(v||'').trim();
+      if(!v||v===B)return;
+      try{if(sessionStorage.getItem('ib_ver_reload')===v)return;sessionStorage.setItem('ib_ver_reload',v)}catch(e){}
+      location.reload();
+    }).catch(function(){})};
+    setTimeout(_chk,4000);setInterval(_chk,30*60*1000);
+  }catch(e){}
+})();
 /* v46 — 全站对象仓库清单：建库、重置、导入三处共用同一份，避免各自维护而漏项 */
 const IB_STORES=['posts','categories','about','music','apiSettings','chatMessages','letters','apiConfigs','groups','blogComments','memories','chatThreads','chatSummaries','uploadedFiles','blogAnnotations','projects','projectFiles','autoMemory','calEvents','calNotes','calLedger','feed','memVectors'];
 function openDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open(DB_NAME,DB_VER);req.onupgradeneeded=e=>{const d=e.target.result;IB_STORES.forEach(s=>{if(!d.objectStoreNames.contains(s))d.createObjectStore(s,{keyPath:s==='categories'?'name':'id'})});try{const store=e.target.transaction.objectStore('chatMessages');if(!store.indexNames.contains('byFriend'))store.createIndex('byFriend','friendId',{unique:false})}catch(ex){};try{const pf=e.target.transaction.objectStore('projectFiles');if(!pf.indexNames.contains('byProject'))pf.createIndex('byProject','projectId',{unique:false})}catch(ex){};try{const am=e.target.transaction.objectStore('autoMemory');if(!am.indexNames.contains('byFriend'))am.createIndex('byFriend','friendId',{unique:false})}catch(ex){}};req.onsuccess=()=>{db=req.result;resolve(db)};req.onerror=()=>reject(req.error)})}
