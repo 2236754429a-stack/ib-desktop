@@ -12824,6 +12824,69 @@ function _buildAvatarCircle(name,src,size){
   else{d.textContent=(name||'?').charAt(0).toUpperCase()}
   return d;
 }
+window._ibRegenFoldD=null;
+async function _regenVariantsD(m,div){/* v314-d DeepSeek 式重新生成：旧回答保留为变体，生成期间不进上下文（桌面历史按库重建，先移出旧记录，失败归还） */
+  try{
+    if(!m||!m.id)return;
+    if((m.friendId||'').startsWith('group_')){toast('群聊暂不支持重新生成');return}
+    if(typeof activeFriendId!=='undefined'&&activeFriendId!==m.friendId){toast('请先切到这个对话再重新生成');return}
+    if(_chatSendingFor&&_chatSendingFor.has(m.friendId)){toast('TA 正在回复中');return}
+    let all=[];try{all=await dbGetByIndex('chatMessages','byFriend',m.friendId)}catch(e){all=[]}
+    const mine=all.filter(x=>x&&!x.callFold&&(m.threadId?x.threadId===m.threadId:!x.threadId)).sort((a,b)=>(a.timestamp||0)-(b.timestamp||0));
+    const lastAi=mine.filter(x=>x.role==='assistant').pop();
+    if(!lastAi||lastAi.id!==m.id){toast('只能重新生成最后一条回复');return}
+    const lastU=mine.filter(x=>x.role==='user').pop();
+    window._ibRegenFoldD={cfgId:m.friendId,oldId:m.id,ts:m.timestamp||Date.now(),q:String((lastU&&lastU.content)||'').slice(0,4000),
+      variants:(Array.isArray(m.variants)&&m.variants.length)?m.variants.slice():[{content:String(m.content||''),ts:m.timestamp||Date.now(),thinking:String(m.thinking||'')}]};
+    try{await dbDelete('chatMessages',m.id)}catch(e){}
+    try{/* 摘掉气泡与其上方的思考链/头像行/续发时间（与 deleteSingleMsg 同口径） */
+      let prev=div.previousElementSibling;
+      while(prev&&(prev.classList.contains('chat-msg-header')||prev.classList.contains('chat-msg-cont-time')||prev.classList.contains('chat-thinking-wrap'))){const gone=prev;prev=prev.previousElementSibling;gone.remove()}
+      div.remove();
+    }catch(e){}
+    try{await sendChatMessage({regen:true})}finally{
+      if(window._ibRegenFoldD){/* 生成失败/被中断：旧记录归还、气泡重画 */
+        try{await dbPut('chatMessages',m)}catch(e){}
+        try{const mc=document.getElementById(currentPage==='chat'?'chat-full-messages':'chat-messages');if(mc){mc.appendChild(_buildMsgEl(m));mc.scrollTop=mc.scrollHeight}}catch(e){}
+        window._ibRegenFoldD=null;
+      }
+    }
+  }catch(e){}
+}
+async function _varSwitchD(m,dir){/* 切换版本：content 永远镜像选中项（历史/导出/搜索只认它），就地重绘气泡 */
+  try{
+    const vs=m.variants;if(!vs||vs.length<2)return;
+    const cur=(typeof m.varSel==='number'&&vs[m.varSel])?m.varSel:vs.length-1;
+    const idx=(cur+dir+vs.length)%vs.length;
+    if(idx===cur)return;
+    m.varSel=idx;m.content=vs[idx].content||'';m.thinking=vs[idx].thinking||'';
+    try{await dbPut('chatMessages',m)}catch(e){}
+    document.querySelectorAll('.chat-msg[data-msg-id="'+m.id+'"]').forEach(function(el){
+      const txt=el.querySelector('.r-text');
+      if(txt){try{txt.innerHTML='';_renderAiContent(txt,el,m.content||'',m.wsResults)}catch(e){txt.textContent=m.content||''}}
+      let prev=el.previousElementSibling;while(prev&&prev.classList&&prev.classList.contains('chat-msg-cont-time'))prev=prev.previousElementSibling;
+      if(prev&&prev.classList&&prev.classList.contains('chat-thinking-wrap')){const th=m.thinking?_cleanThinkingText(m.thinking):'';const body=prev.querySelector('.chat-thinking-body');if(body)body.textContent=String(th||'').replace(/^\s+/,'');prev.style.display=th?'':'none'}
+      const n2=vs.length;const sel=(typeof m.varSel==='number')?m.varSel:n2-1;const lab=el.querySelector('.var-nav-lab');if(lab)lab.textContent=(sel+1)+'/'+n2;
+    });
+  }catch(e){}
+}
+function _varNavD(m){/* DeepSeek 式 ‹ i/n › 切换条：仅在有多版本时出现 */
+  try{
+    if(!m||m.role==='user'||!Array.isArray(m.variants)||m.variants.length<2)return null;
+    const n=m.variants.length;const sel=(typeof m.varSel==='number'&&m.variants[m.varSel])?m.varSel:n-1;
+    const nav=document.createElement('div');
+    nav.style.cssText='display:flex;align-items:center;gap:3px;margin:4px 0 2px;opacity:.8';
+    const mkB=function(t){const b=document.createElement('button');b.textContent=t;
+      b.style.cssText='border:none;background:rgba(128,128,128,.16);color:inherit;border-radius:10px;min-width:24px;height:20px;line-height:1;font-size:12px;cursor:pointer;padding:0 6px';return b};
+    const prev=mkB('‹'),next=mkB('›');
+    prev.addEventListener('click',async e=>{e.stopPropagation();await _varSwitchD(m,-1)});
+    next.addEventListener('click',async e=>{e.stopPropagation();await _varSwitchD(m,1)});
+    const lab=document.createElement('span');lab.className='var-nav-lab';lab.textContent=(sel+1)+'/'+n;
+    lab.style.cssText='font-size:11px;min-width:30px;text-align:center;opacity:.85';
+    nav.appendChild(prev);nav.appendChild(lab);nav.appendChild(next);
+    return nav;
+  }catch(e){return null}
+}
 function _buildMsgEl(m,isFullscreen,isGroupCont){
 
   const frag=document.createDocumentFragment();
@@ -12895,6 +12958,8 @@ function _buildMsgEl(m,isFullscreen,isGroupCont){
     if(m.ibOps&&m.ibOps.length)try{m.ibOps.forEach(function(r){div.appendChild(_ibOpCardFromMobile(r))})}catch(e){}/* v22-sync：手机端 ibOps 结果卡 */
     if(!isUser&&m.musicCard)try{div.appendChild(_musicBuildCardD(m.musicCard))}catch(e){}
     if(m.id){const db=document.createElement('button');db.className='chat-msg-del';db.textContent='✕';db.title='删除此消息';db.onclick=function(ev){ev.stopPropagation();deleteSingleMsg(m.id,div,frag)};div.appendChild(db)}
+    if(m.id&&m.role!=='user'){const rb=document.createElement('button');rb.className='chat-msg-del';rb.textContent='↻';rb.title='重新生成（保留旧回答，可切换版本；仅最后一条回复可用）';rb.style.right='24px';rb.style.left='auto';rb.onclick=function(ev){ev.stopPropagation();_regenVariantsD(m,div)};div.appendChild(rb)}/* v314-d 重新生成 */
+    try{const _vn=_varNavD(m);if(_vn)div.appendChild(_vn)}catch(e){}/* v314-d 多版本切换条 */
   }else{
     /* Classic panel style — show thinking as clickable toggle too */
     if(!isUser&&_thinkTxt){
@@ -12928,6 +12993,8 @@ function _buildMsgEl(m,isFullscreen,isGroupCont){
     if(m.ibOps&&m.ibOps.length)try{m.ibOps.forEach(function(r){div.appendChild(_ibOpCardFromMobile(r))})}catch(e){}/* v22-sync：手机端 ibOps 结果卡 */
     if(!isUser&&m.musicCard)try{div.appendChild(_musicBuildCardD(m.musicCard))}catch(e){}
     if(m.id){const db=document.createElement('button');db.className='chat-msg-del';db.textContent='✕';db.title='删除此消息';db.onclick=function(ev){ev.stopPropagation();deleteSingleMsg(m.id,div,frag)};div.appendChild(db)}
+    if(m.id&&m.role!=='user'){const rb=document.createElement('button');rb.className='chat-msg-del';rb.textContent='↻';rb.title='重新生成（保留旧回答，可切换版本；仅最后一条回复可用）';rb.style.right='24px';rb.style.left='auto';rb.onclick=function(ev){ev.stopPropagation();_regenVariantsD(m,div)};div.appendChild(rb)}/* v314-d 重新生成 */
+    try{const _vn=_varNavD(m);if(_vn)div.appendChild(_vn)}catch(e){}/* v314-d 多版本切换条 */
   }
   frag.appendChild(div);
   if(m.quote)div.appendChild(_buildQuoteEl(m.quote));/* v48 — 引用在气泡内、正文下方 */
@@ -14459,6 +14526,7 @@ const _GCALL_HIST_NOTE='\n【通话标记说明】历史消息里以「[语音�
 async function sendChatMessage(voiceMsg){
 
   const _silentHelp=!!(voiceMsg&&voiceMsg.silentHelp);const _tcMode=!!(voiceMsg&&(voiceMsg.toolCont||voiceMsg.silentHelp));if(!_tcMode)window._ibtcRounds=0;
+  const _regen=!!(voiceMsg&&voiceMsg.regen);/* v314-d 重新生成模式：不创建用户消息、不读输入框、不清附件暂存 */
   const _voice=(voiceMsg&&voiceMsg.dataUrl)?voiceMsg:null;
   const _callX=(voiceMsg&&voiceMsg.callText!=null)?voiceMsg:null;/* v47 通话：细发送链 */
   /* Find active friend config */
@@ -14472,11 +14540,12 @@ async function sendChatMessage(voiceMsg){
   const miniInput=document.getElementById('chat-input');
   const fullInput=document.getElementById('chat-full-input');
   const input=currentPage==='chat'?fullInput:miniInput;
-  const text=_voice?'':(_callX?String(_callX.callText):(_tcMode?'［系统：工具结果已回传，请据此继续作答；仍可继续调用工具，不要重复相同参数的调用。］':input.value.trim()));/* 语音消息不读取、不清空输入框；v83 r1：连续调用轮不读输入框 */
+  const text=_voice?'':(_callX?String(_callX.callText):(_tcMode?'［系统：工具结果已回传，请据此继续作答；仍可继续调用工具，不要重复相同参数的调用。］':(_regen?String((window._ibRegenFoldD&&window._ibRegenFoldD.q)||''):input.value.trim())));/* 语音消息不读取、不清空输入框；v83 r1：连续调用轮不读输入框；v314-d 重生成轮读记忆门控用的原问题 */
   const _ctxText=_voice?_voiceApiLine(_voice):text;/* 供 @提及判定、记忆检索、Auto Memory 使用的等效文本 */
-  if(!text&&!_voice&&!_pendingImages.length&&!_pendingFiles.length)return;
+  if(!_regen&&!text&&!_voice&&!_pendingImages.length&&!_pendingFiles.length)return;
 
   const isGroup=_targetFriend&&_targetFriend.startsWith('group_');
+  if(_regen&&isGroup)return;/* v314-d：群聊不支持重新生成 */
 
   if(isGroup){
     /* ===== GROUP CHAT MODE ===== */
@@ -14762,6 +14831,7 @@ async function sendChatMessage(voiceMsg){
         if(_gCallRes.truncated)aiMsg.truncated=true;/* 任务6 */
         await _musicMaybeDecorateMsgD(aiMsg);
         await dbPut('chatMessages',aiMsg);try{if(typeof _targetFriend!=='undefined'&&window.IBCALLW)IBCALLW.onAiMsg(_targetFriend,aiMsg)}catch(e){}
+        try{const _rf2=window._ibRegenFoldD;if(_rf2&&_rf2.cfgId===_targetFriend){try{await dbDelete('chatMessages',_rf2.oldId)}catch(e){}window._ibRegenFoldD=null}}catch(e){}/* v314-d 重生成成功：新答案已折叠旧回答入库，移除旧记录 */
         roundExtras.push(aiMsg);
         if(_gStreamOk){
 
@@ -14823,11 +14893,11 @@ async function sendChatMessage(voiceMsg){
   _chatSendingFor.add(_targetFriend);
   const sendBtn=document.getElementById('chat-send-btn');
   _syncSendBtnD();
-  if(!_voice&&!_tcMode&&!_callX)input.value='';
-  const sentImages=(_voice||_tcMode)?[]:(_callX?((Array.isArray(_callX.images)?_callX.images:[]).concat(Array.isArray(_callX.ephImages)?_callX.ephImages:[])):_pendingImages.slice());if(!_voice&&!_tcMode&&!_callX)_pendingImages=[];/* v63 ③：通话轮可带夹带画面（落库）与看画面临时帧（只随请求走） */
-  const sentFiles=(_voice||_tcMode||_callX)?[]:_pendingFiles.slice();if(!_voice&&!_tcMode&&!_callX){_pendingFiles=[];renderAttachPreviews()}
+  if(!_voice&&!_tcMode&&!_callX&&!_regen)input.value='';
+  const sentImages=(_voice||_tcMode||_regen)?[]:(_callX?((Array.isArray(_callX.images)?_callX.images:[]).concat(Array.isArray(_callX.ephImages)?_callX.ephImages:[])):_pendingImages.slice());if(!_voice&&!_tcMode&&!_callX&&!_regen)_pendingImages=[];/* v63 ③：通话轮可带夹带画面（落库）与看画面临时帧（只随请求走）；v314-d 重生成不动附件暂存 */
+  const sentFiles=(_voice||_tcMode||_callX||_regen)?[]:_pendingFiles.slice();if(!_voice&&!_tcMode&&!_callX&&!_regen){_pendingFiles=[];renderAttachPreviews()}
 
-  if(!_silentHelp){
+  if(!_silentHelp&&!_regen){
     const userMsg={id:'msg_'+Date.now()+'_u',role:'user',content:text,friendId:_targetFriend,timestamp:Date.now()};/* 编号方式与群聊统一：后缀防同毫秒碰撞 */
     /* v46 引用：随本条消息存入，并在发送后清空引用条 */
     const _sentQuote=_voice?null:_pendingQuote;
@@ -15126,6 +15196,10 @@ async function sendChatMessage(voiceMsg){
         })
       }
       const aiMsg={id:'msg_'+Date.now()+'_'+Math.floor(Math.random()*100000),role:'assistant',content:replyText,thinking:thinkingText||undefined,friendId:_targetFriend,timestamp:Date.now()};/* 编号方式与群聊统一：随机后缀防同毫秒碰撞 */
+      try{const _rf=window._ibRegenFoldD;if(_rf&&_rf.cfgId===_targetFriend){/* v314-d 重新生成＝多版本：旧回答收进 variants，content 恒等于选中版 */
+        aiMsg.variants=(_rf.variants||[]).concat([{content:String(replyText||''),ts:Date.now(),thinking:String(thinkingText||'')}]);
+        aiMsg.varSel=aiMsg.variants.length-1;aiMsg.timestamp=_rf.ts;
+      }}catch(e){}
       if(_srchLog.length)aiMsg.wsSearches=_srchLog;
       if(_memR.length)aiMsg.memOps=_memR.map(r=>({ok:r.ok,label:r.label,detail:r.detail}));
       if(_calR.length)aiMsg.calNotes=_calR.map(r=>({ok:r.ok,label:r.label,detail:r.detail}));
@@ -15139,8 +15213,10 @@ async function sendChatMessage(voiceMsg){
       }catch(e){}
       await _musicMaybeDecorateMsgD(aiMsg);
         await dbPut('chatMessages',aiMsg);try{if(typeof _targetFriend!=='undefined'&&window.IBCALLW)IBCALLW.onAiMsg(_targetFriend,aiMsg)}catch(e){}
+        try{const _rf2=window._ibRegenFoldD;if(_rf2&&_rf2.cfgId===_targetFriend){try{await dbDelete('chatMessages',_rf2.oldId)}catch(e){}window._ibRegenFoldD=null}}catch(e){}/* v314-d 重生成成功：新答案已折叠旧回答入库，移除旧记录 */
       streamRefs.forEach(ref=>{
         if(aiMsg.id){ref.div.dataset.msgId=aiMsg.id;const db=document.createElement('button');db.className='chat-msg-del';db.textContent='✕';db.title='删除此消息';db.onclick=function(ev){ev.stopPropagation();deleteSingleMsg(aiMsg.id,ref.div)};ref.div.appendChild(db);
+          try{const _vn=_varNavD(aiMsg);if(_vn)ref.div.appendChild(_vn)}catch(e){}/* v314-d 多版本切换条 */
           if(typeof _chatSelectMode!=='undefined'&&_chatSelectMode&&ref.full&&!ref.div.querySelector('.chat-sel-circle')){const sc=document.createElement('div');sc.className='chat-sel-circle';sc.onclick=function(ev){ev.stopPropagation();_toggleMsgSel(aiMsg.id,sc)};ref.div.appendChild(sc)}/* BUGFIX: Select 模式中流式完成的消息补圈 */}
         if(aiMsg.truncated&&ref.full)ref.txt.appendChild(_buildContinuePill(aiMsg.id));/* 任务6 */
       });
@@ -15177,6 +15253,10 @@ async function sendChatMessage(voiceMsg){
       if(_wsNs.files&&_wsNs.files.length){try{await _wsArchiveFileBlocks(_wsNs.files,cfg.nickname||cfg.model||'AI')}catch(e){}}
       var _wsNsPhantom=_wsCheckPhantom(_wsNs.cleanText,_wsNs.ops.length);
       const aiMsg={id:'msg_'+Date.now()+'_'+Math.floor(Math.random()*100000),role:'assistant',content:replyText,thinking:thinkingText||undefined,friendId:_targetFriend,timestamp:Date.now()};/* 编号方式与群聊统一：随机后缀防同毫秒碰撞 */
+      try{const _rf=window._ibRegenFoldD;if(_rf&&_rf.cfgId===_targetFriend){/* v314-d 重新生成＝多版本：旧回答收进 variants，content 恒等于选中版 */
+        aiMsg.variants=(_rf.variants||[]).concat([{content:String(replyText||''),ts:Date.now(),thinking:String(thinkingText||'')}]);
+        aiMsg.varSel=aiMsg.variants.length-1;aiMsg.timestamp=_rf.ts;
+      }}catch(e){}
       if(_srchLogN.length)aiMsg.wsSearches=_srchLogN;/* 任务A */
       if(_memRNs.length)aiMsg.memOps=_memRNs.map(r=>({ok:r.ok,label:r.label,detail:r.detail}));
       if(_calRNs.length)aiMsg.calNotes=_calRNs.map(r=>({ok:r.ok,label:r.label,detail:r.detail}));
@@ -15186,8 +15266,10 @@ async function sendChatMessage(voiceMsg){
       if(_callResN.truncated)aiMsg.truncated=true;/* 任务6：自动续写轮数用尽仍截断 */
       await _musicMaybeDecorateMsgD(aiMsg);
         await dbPut('chatMessages',aiMsg);try{if(typeof _targetFriend!=='undefined'&&window.IBCALLW)IBCALLW.onAiMsg(_targetFriend,aiMsg)}catch(e){}
+        try{const _rf2=window._ibRegenFoldD;if(_rf2&&_rf2.cfgId===_targetFriend){try{await dbDelete('chatMessages',_rf2.oldId)}catch(e){}window._ibRegenFoldD=null}}catch(e){}/* v314-d 重生成成功：新答案已折叠旧回答入库，移除旧记录 */
       if(activeFriendId===_targetFriend&&(!_callX||!activeThreadId)){/* v48 ⑮：通话细发送链不往正开着的话题视图里画 */
         appendChatBubble('ai',replyText,undefined,thinkingText||undefined,aiMsg.id,aiMsg.images,undefined,_wsRNs);
+        try{if(Array.isArray(aiMsg.variants)&&aiMsg.variants.length>1)document.querySelectorAll('.chat-msg[data-msg-id="'+aiMsg.id+'"]').forEach(function(el){const _vn=_varNavD(aiMsg);if(_vn)el.appendChild(_vn)})}catch(e){}/* v314-d 多版本切换条 */
         if(_srchLogN.length||_memRNs.length)document.querySelectorAll('.chat-msg[data-msg-id="'+aiMsg.id+'"]').forEach(function(el){_amAppendExtraCards(el,_srchLogN,_memRNs)});/* 任务A：非流式也显示搜索/记忆卡 */
         if(_wsPendingReads.length)document.querySelectorAll('.chat-msg[data-msg-id="'+aiMsg.id+'"]').forEach(function(el){el.appendChild(_buildWsReadHint())});
         if(_brCardsNs.length)document.querySelectorAll('.chat-msg[data-msg-id="'+aiMsg.id+'"]').forEach(function(el){_brCardsNs.forEach(function(c){el.appendChild(_brBuildCard(c))})});
@@ -24409,6 +24491,28 @@ async function _ibCareSelfTestD(){
     return '假零检查 '+(fakeHit?'未通过（门槛失灵！）':'通过')+' · 库 '+all.length+' 条 · 待审 '+review+' 条 · 门槛 '+(Number(ms.relTh)||0.15)+(ms.gate!==false?'（开）':'（关）');
   }catch(e){return '自检出错：'+String(e&&e.message||e).slice(0,80)}
 }
+async function _ibChatEchoBlock(q,fid){/* v288 旧对话回响：从云端原始聊天记录捞相关片段（chat_search 关键词+向量双路），记忆库之外的兜底；失败/超时静默跳过 */
+  try{
+    q=String(q||'').trim();if(q.length<2||!fid)return'';
+    const c=(typeof IBSyncClient!=='undefined'&&IBSyncClient.getCfg)?IBSyncClient.getCfg():null;
+    if(!c||!c.serverUrl||!c.token)return'';
+    const ac=(typeof AbortController!=='undefined')?new AbortController():null;
+    const tm=ac?setTimeout(function(){try{ac.abort()}catch(e){}},8000):null;
+    let j=null;
+    try{const r=await fetch(String(c.serverUrl).replace(/\/+$/,'')+'/chat_search',{method:'POST',headers:{'Content-Type':'application/json','X-Sync-Token':c.token},body:JSON.stringify({query:q.slice(0,300),friendId:String(fid),limit:4}),signal:ac?ac.signal:undefined});if(!r.ok)return'';j=await r.json()}
+    catch(e){return''}finally{if(tm)clearTimeout(tm)}
+    const hits=(j&&j.hits)||[];const seen={};const lines=[];
+    for(const h of hits){
+      const sn=String(h.snippet||'').replace(/\s+/g,' ').trim();if(!sn)continue;
+      const k=sn.slice(0,40);if(seen[k])continue;seen[k]=1;
+      let d='';try{const dt=new Date(Number(h.ts)||0);if(!isNaN(dt.getTime()))d=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')}catch(e){}
+      lines.push('- '+(d?'('+d+' · '+(h.role==='user'?'用户':'你')+'说过) ':'')+sn.slice(0,160));
+      if(lines.length>=3)break;
+    }
+    if(!lines.length)return'';
+    return '【旧对话回响（系统参考，勿提及此段）】以下是从过往原始聊天记录里检索到的相关片段，帮你想起对话源头：\n'+lines.join('\n');
+  }catch(e){return''}
+}
 async function getMemoryContext(apiId,opts){
   opts=opts||{};
   const memSettings=await getMemorySettings();
@@ -24418,10 +24522,11 @@ async function getMemoryContext(apiId,opts){
   const isGroup=opts.isGroup||false;
   const groupMemEnabled=opts.groupMemEnabled||false;
   const userMsg=opts.userMessage||'';
+  let _echo='';try{_echo=(userMsg&&typeof _ibChatEchoBlock==='function')?await _ibChatEchoBlock(String(userMsg),apiId):''}catch(e){_echo=''}
   try{
     const all=await dbGetAll('memories');
     const visible=all.filter(m=>isMemoryVisibleTo(m,apiId,isGroup,groupMemEnabled)&&!(m.needsReview&&!m.reviewed));/* v286-d：待审记忆不注入 */
-    if(!visible.length)return '';
+    if(!visible.length)return _echo;
     /* v286-d：可选嵌入通道——查询向量一次，逐条余弦，无向量条目降级回词法；v287-d 向量在本地 memVectors（不同步），旧 m.emb 兜底 */
     let _vecMap=null;try{_vecMap=new Map((await dbGetAll('memVectors')).map(function(x){return [x.id,x.v]}).filter(function(x){return x[1]&&x[1].length}))}catch(e){_vecMap=null}
     const _vecOf=function(m){return (_vecMap&&_vecMap.get(m.id))||(m.emb&&m.emb.length?m.emb:null)};
@@ -24484,7 +24589,7 @@ async function getMemoryContext(apiId,opts){
     }
     if(gateOn&&!chosen.length&&!GC.strict){const top1=scored.find(m=>!m.pinned);if(top1){const line='（浮现）'+_formatMemLine(top1,apiId,contentLen,keywords);if(chars+line.length<=maxChars){ctx+=line;chars+=line.length;count++;selected.add(top1.id)}}}/* 门槛全空给一条面包屑；严格模式宁缺 */
     if(assoc&&exploreBudget>50){const line='（联想）'+_formatMemLine(assoc,apiId,contentLen,keywords);if(chars+line.length<=maxChars){ctx+=line;chars+=line.length;count++;selected.add(assoc.id)}}/* 联想专座走探索预算 */
-    if(!count)return '';
+    if(!count)return _echo;
     for(const id of selected){
       try{
         const orig=await dbGet('memories',id);
@@ -24498,7 +24603,7 @@ async function getMemoryContext(apiId,opts){
         _ibGateLogPush({ts:Date.now(),fid:apiId,q:String(userMsg||'').slice(0,80),relTh:relTh,passed:chosen.map(m=>({id:m.id,rel:+(relMap[m.id]||0).toFixed(2)})),blocked:blocked,float:!chosen.length&&count>0});
       }catch(e){}
     }
-    return ctx;
+    return _echo?(ctx+'\n'+_echo):ctx;
   }catch(e){return ''}
 }
 function _memExcerpt(body,kws,clen){
