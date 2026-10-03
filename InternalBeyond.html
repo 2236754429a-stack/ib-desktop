@@ -1865,7 +1865,7 @@ body:not(.theme-infernal) .am-flag{color:#2c5590;border-color:rgba(56,102,168,0.
   .am-ava{width:88px;height:88px;font-size:2.1rem}
   .am-nav{font-size:2.1rem;top:244px}}
 .chat-msg-del{position:absolute;top:4px;right:6px;width:16px;height:16px;border:none;background:none;
-  color:var(--text-muted);cursor:pointer;font-size:0.6rem;opacity:0;transition:opacity 0.2s;
+  color:var(--text-muted);cursor:pointer;font-size:0.6rem;opacity:0.3;transition:opacity 0.2s;
   display:flex;align-items:center;justify-content:center;border-radius:50%;padding:0;line-height:1}
 .chat-msg:hover .chat-msg-del{opacity:0.5}
 .chat-msg-del:hover{opacity:1!important;color:#e88;background:rgba(230,130,130,0.12)}
@@ -12930,13 +12930,10 @@ async function _ibRegenChipRun(chip){
     await _regenVariantsD(m,el);
   }catch(e){}
 }
-function _ibAttachRegenChip(container){/* 渲染收尾：清掉旧胶囊，把"重新生成"挂到最后一条 AI 回复 */
+function _ibAttachRegenChip(container){/* 渲染收尾：清掉旧胶囊，给每一条 AI 回复都挂"重新生成"胶囊（v314-d8：用户要求每条都有） */
   try{
     container.querySelectorAll('.ib-regen-chip').forEach(function(x){x.remove()});
-    const as=container.querySelectorAll('.chat-msg.ai[data-msg-id]');
-    if(!as.length)return;
-    const c=_ibRegenChipD(as[as.length-1].dataset.msgId);
-    if(c)as[as.length-1].appendChild(c);
+    container.querySelectorAll('.chat-msg.ai[data-msg-id]').forEach(function(el){const c=_ibRegenChipD(el.dataset.msgId);if(c)el.appendChild(c)});
   }catch(e){}
 }
 function _buildMsgEl(m,isFullscreen,isGroupCont){
@@ -13985,6 +13982,8 @@ function _bsSplit(text){
   return segs;
 }
 function _renderAiContent(textEl,container,text,wsResults){
+  /* v314-d7：历史消息里已存库的 adv 标签（ws_mem_search 等曾在修复前漏进正文）渲染时一律剥除 */
+  try{if(text&&/<ws_(mem_search|cal_add|cal_edit|cal_del|cal_meet|cal_list)\b/i.test(String(text)))text=String(text).replace(_ADV_TAG_RE,'').replace(/\n{3,}/g,'\n\n').replace(/[ \t]+\n/g,'\n')}catch(e){}
   var _bsHost=container||textEl.closest('.chat-msg');
   /* 若上一次渲染把 r-head 移进过首段，先移回气泡内原位，避免被下面的清空动作抹掉 */
   var _hdPrev=textEl.querySelector('.r-head');
@@ -15006,6 +15005,7 @@ async function sendChatMessage(voiceMsg){
     const _vNative=_vmAudioNative(cfg)&&(_vtS1.direct!==false);/* 音频直发判定：能听原声的模型（「音频直发」开关默认开）不附加声学语气段 */
     const messages=history.map((m,i)=>{
       var mc=m.content||'';
+      try{if(mc&&/<ws_(mem_search|cal_add|cal_edit|cal_del|cal_meet|cal_list)\b/i.test(String(mc)))mc=String(mc).replace(_ADV_TAG_RE,'')}catch(e){}/* v314-d7：修复前漏进历史正文的 adv 标签不再回传给模型（防模仿） */
       if(m.role==='user'&&m.gift)mc=_giftLine(m);else if(m.role==='user'&&m.callEnd&&m.callEnd.gifts&&m.callEnd.gifts.total>0){var _gsL=_giftSumLine(m);if(_gsL)mc+='\n'+_gsL}else if(m.role==='user'&&/^\[视频通话快照\]/.test(mc))mc=_snapLine(m);
 
       if(m.quote&&m.quote.text)mc='[引用 '+(m.quote.name||(m.quote.role==='user'?'对方':'你'))+'的消息：'+String(m.quote.text).slice(0,300)+']\n'+mc;
@@ -15226,7 +15226,7 @@ async function sendChatMessage(voiceMsg){
       if(_wsParsed.ops.length)_wsResults=await _execWsOps(_wsParsed.ops,cfg.nickname||cfg.model||'AI',cfg);
       if(_wsParsed.files&&_wsParsed.files.length){try{await _wsArchiveFileBlocks(_wsParsed.files,cfg.nickname||cfg.model||'AI')}catch(e){}}
         var _wsPhantom=_wsCheckPhantom(_wsParsed.cleanText,_wsParsed.ops.length);
-        try{const _avS=await _ibAdvProcess(replyText,cfg,{addItem:advAddItem,editItem:advEditItem,delItem:advDelItem,setMeet:advSetMeet,listItems:advListItems});if(_avS){if(_avS.clean!==replyText)replyText=_avS.clean;_avS.cards.forEach(function(_c9){_memR.push({ok:_c9.ok,label:_c9.label,detail:_c9.detail})})}}catch(e){}/* v314-d5：记忆检索/日历标签执行与剥除（此前漏接导致标签原样上屏） */
+        try{const _avS=await _ibAdvProcess(replyText,cfg,{addItem:advAddItem,editItem:advEditItem,delItem:advDelItem,setMeet:advSetMeet,listItems:advListItems});if(_avS){if(_avS.clean!==replyText)replyText=_avS.clean;_avS.cards.forEach(function(_c9){_memR.push({ok:_c9.ok,label:_c9.label,detail:_c9.detail})})}}catch(e){replyText=String(replyText||'').replace(_ADV_TAG_RE,'').replace(/\n{3,}/g,'\n\n').replace(/[ \t]+\n/g,'\n').trim()}/* v314-d7：标签必剥——执行失败也不能上屏 */
         streamRefs.forEach(ref=>{_wsFinalizeBubble(ref,replyText,_wsResults)});
       if(_srchLog.length||_memR.length)streamRefs.forEach(ref=>{_amAppendExtraCards(ref.isTextNode?ref.div:ref.txt,_srchLog,_memR)});
       if(_wsPendingReads.length)streamRefs.forEach(ref=>{(ref.isTextNode?ref.div:ref.txt).appendChild(_buildWsReadHint())});
@@ -15309,7 +15309,7 @@ async function sendChatMessage(voiceMsg){
       if(_wsNs.ops.length)_wsRNs=await _execWsOps(_wsNs.ops,cfg.nickname||cfg.model||'AI',cfg);
       if(_wsNs.files&&_wsNs.files.length){try{await _wsArchiveFileBlocks(_wsNs.files,cfg.nickname||cfg.model||'AI')}catch(e){}}
       var _wsNsPhantom=_wsCheckPhantom(_wsNs.cleanText,_wsNs.ops.length);
-      try{const _avN=await _ibAdvProcess(replyText,cfg,{addItem:advAddItem,editItem:advEditItem,delItem:advDelItem,setMeet:advSetMeet,listItems:advListItems});if(_avN){replyText=_avN.clean;_avN.cards.forEach(function(_c9){_memRNs.push({ok:_c9.ok,label:_c9.label,detail:_c9.detail})})}}catch(e){}/* v314-d5：记忆检索/日历标签执行与剥除 */
+      try{const _avN=await _ibAdvProcess(replyText,cfg,{addItem:advAddItem,editItem:advEditItem,delItem:advDelItem,setMeet:advSetMeet,listItems:advListItems});if(_avN){replyText=_avN.clean;_avN.cards.forEach(function(_c9){_memRNs.push({ok:_c9.ok,label:_c9.label,detail:_c9.detail})})}}catch(e){replyText=String(replyText||'').replace(_ADV_TAG_RE,'').replace(/\n{3,}/g,'\n\n').replace(/[ \t]+\n/g,'\n').trim()}/* v314-d7：标签必剥——执行失败也不能上屏 */
       const aiMsg={id:'msg_'+Date.now()+'_'+Math.floor(Math.random()*100000),role:'assistant',content:replyText,thinking:thinkingText||undefined,friendId:_targetFriend,timestamp:Date.now()};/* 编号方式与群聊统一：随机后缀防同毫秒碰撞 */
       try{const _rf=window._ibRegenFoldD;if(_rf&&_rf.cfgId===_targetFriend){/* v314-d 重新生成＝多版本：旧回答收进 variants，content 恒等于选中版 */
         aiMsg.variants=(_rf.variants||[]).concat([{content:String(replyText||''),ts:Date.now(),thinking:String(thinkingText||'')}]);
