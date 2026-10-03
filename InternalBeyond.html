@@ -12900,6 +12900,15 @@ function _varNavD(m){/* DeepSeek 式 ‹ i/n › 切换条：仅在有多版本�
     return nav;
   }catch(e){return null}
 }
+function _regenBtnD(m){/* v314-d2 实时气泡（流式/非流式）上的 ↻；历史渲染路径的 ↻ 在 _buildMsgEl 内 */
+  try{
+    if(!m||m.role==='user'||!m.id)return null;
+    const rb=document.createElement('button');rb.className='chat-msg-del';rb.textContent='↻';rb.title='重新生成（保留旧回答，可切换版本）';
+    rb.style.right='24px';rb.style.left='auto';
+    rb.onclick=function(ev){ev.stopPropagation();_regenVariantsD(m,rb.closest('.chat-msg')||rb.parentNode)};
+    return rb;
+  }catch(e){return null}
+}
 function _buildMsgEl(m,isFullscreen,isGroupCont){
 
   const frag=document.createDocumentFragment();
@@ -15230,6 +15239,7 @@ async function sendChatMessage(voiceMsg){
       streamRefs.forEach(ref=>{
         if(aiMsg.id){ref.div.dataset.msgId=aiMsg.id;const db=document.createElement('button');db.className='chat-msg-del';db.textContent='✕';db.title='删除此消息';db.onclick=function(ev){ev.stopPropagation();deleteSingleMsg(aiMsg.id,ref.div)};ref.div.appendChild(db);
           try{const _vn=_varNavD(aiMsg);if(_vn)ref.div.appendChild(_vn)}catch(e){}/* v314-d 多版本切换条 */
+          try{const _rb=_regenBtnD(aiMsg);if(_rb){_rb.onclick=function(ev){ev.stopPropagation();_regenVariantsD(aiMsg,ref.div)};ref.div.appendChild(_rb)}}catch(e){}/* v314-d2 实时气泡 ↻ */
           if(typeof _chatSelectMode!=='undefined'&&_chatSelectMode&&ref.full&&!ref.div.querySelector('.chat-sel-circle')){const sc=document.createElement('div');sc.className='chat-sel-circle';sc.onclick=function(ev){ev.stopPropagation();_toggleMsgSel(aiMsg.id,sc)};ref.div.appendChild(sc)}/* BUGFIX: Select 模式中流式完成的消息补圈 */}
         if(aiMsg.truncated&&ref.full)ref.txt.appendChild(_buildContinuePill(aiMsg.id));/* 任务6 */
       });
@@ -15283,6 +15293,7 @@ async function sendChatMessage(voiceMsg){
       if(activeFriendId===_targetFriend&&(!_callX||!activeThreadId)){/* v48 ⑮：通话细发送链不往正开着的话题视图里画 */
         appendChatBubble('ai',replyText,undefined,thinkingText||undefined,aiMsg.id,aiMsg.images,undefined,_wsRNs);
         try{if(Array.isArray(aiMsg.variants)&&aiMsg.variants.length>1)document.querySelectorAll('.chat-msg[data-msg-id="'+aiMsg.id+'"]').forEach(function(el){const _vn=_varNavD(aiMsg);if(_vn)el.appendChild(_vn)})}catch(e){}/* v314-d 多版本切换条 */
+        try{document.querySelectorAll('.chat-msg[data-msg-id="'+aiMsg.id+'"]').forEach(function(el){const _rb=_regenBtnD(aiMsg);if(_rb){_rb.onclick=function(ev){ev.stopPropagation();_regenVariantsD(aiMsg,el)};el.appendChild(_rb)}})}catch(e){}/* v314-d2 实时气泡 ↻ */
         if(_srchLogN.length||_memRNs.length)document.querySelectorAll('.chat-msg[data-msg-id="'+aiMsg.id+'"]').forEach(function(el){_amAppendExtraCards(el,_srchLogN,_memRNs)});/* 任务A：非流式也显示搜索/记忆卡 */
         if(_wsPendingReads.length)document.querySelectorAll('.chat-msg[data-msg-id="'+aiMsg.id+'"]').forEach(function(el){el.appendChild(_buildWsReadHint())});
         if(_brCardsNs.length)document.querySelectorAll('.chat-msg[data-msg-id="'+aiMsg.id+'"]').forEach(function(el){_brCardsNs.forEach(function(c){el.appendChild(_brBuildCard(c))})});
@@ -24466,6 +24477,13 @@ async function _ibCareRenderD(box){
   if(topBlocked.length){h+='<p class="hint" style="margin:2px 0 4px;opacity:.75">被挡次数最多的记忆——该想起的就置顶：</p>';
     topBlocked.forEach(function(x){h+='<div style="display:flex;gap:6px;align-items:flex-start;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.2)"><div style="flex:1;min-width:0"><div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">'+E(x.title||'（无标题）')+'</div><div style="font-size:12px;opacity:.65">被挡 '+x.n+' 次 · 相关度 '+x.rel+'</div></div><button class="btn" style="flex:none;padding:4px 10px" data-care-pin="'+E(x.id)+'">置顶</button><button class="btn" style="flex:none;padding:4px 10px" data-care-ign="'+E(x.id)+'">忽略</button></div>'})}
   else h+='<p class="hint" style="margin:2px 0 6px;opacity:.65">暂无决策记录——聊几句后回来看。</p>';
+  /* v314-d2 旧对话回响日志：让"聊天记录检索"可观测 */
+  let echoLog=[];try{const _es=await dbGet('apiSettings','memEchoLog');echoLog=(_es&&_es.items)||[]}catch(e){}
+  h+='<div style="font-weight:600;margin:10px 0 4px">旧对话回响日志（原始聊天记录检索）</div>';
+  h+='<p class="hint" style="margin:2px 0 6px;opacity:.75">每次你发消息，都会同时在云端原始聊天记录里跑关键词+语义双路检索，命中片段注入给 TA 供其答话时引用（本身不上屏）。聊完这里如果一直是空的，说明回响通道没跑起来——多半是页面版本旧，先刷新。</p>';
+  if(echoLog.length){echoLog.slice(-8).reverse().forEach(function(r){
+    h+='<div style="padding:5px 0;border-bottom:1px solid rgba(128,128,128,.2)"><div style="display:flex;gap:6px;justify-content:space-between;align-items:flex-start"><div style="flex:1;min-width:0"><div style="font-size:12px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical">'+E(r.q||'')+'</div>'+(r.snip?'<div style="font-size:12px;opacity:.65;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;margin-top:1px">↳ '+E(r.snip)+'</div>':'')+'</div><span style="flex:none;font-size:12px;opacity:.75">'+(r.n?'命中 '+r.n:'0 命中')+' · '+new Date(r.ts).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})+'</span></div></div>';
+  })}else h+='<p class="hint" style="margin:2px 0 6px;opacity:.65">还没有记录。聊一句后回来看。</p>';
   /* 嵌入通道；v287-d 默认内置服务器硅基流动代理（Key 只在服务器） */
   let emb={enabled:false,base:'',key:'',model:''};try{emb=await _ibEmbCfg()}catch(e){}
   let embN=0;try{embN=(await dbGetAll('memVectors')).length}catch(e){}
@@ -24522,6 +24540,10 @@ async function _ibChatEchoBlock(q,fid){/* v288 旧对话回响：从云端原始
       lines.push('- '+(d?'('+d+' · '+(h.role==='user'?'用户':'你')+'说过) ':'')+sn.slice(0,160));
       if(lines.length>=3)break;
     }
+    try{/* v314-d2 可观测：聊天记录检索结果记账（命中数+首条片段），养护抽屉「旧对话回响日志」可见 */
+      const s=(await dbGet('apiSettings','memEchoLog'))||{id:'memEchoLog',items:[]};const items=s.items||[];
+      items.push({ts:Date.now(),q:String(q).slice(0,80),n:lines.length,snip:lines.length?String(lines[0]).replace(/^- /,'').slice(0,110):''});
+      while(items.length>20)items.shift();await dbPut('apiSettings',{id:'memEchoLog',items:items})}catch(e){}
     if(!lines.length)return'';
     return '【旧对话回响（系统参考，勿提及此段）】以下是从过往原始聊天记录里检索到的相关片段，帮你想起对话源头：\n'+lines.join('\n');
   }catch(e){return''}
