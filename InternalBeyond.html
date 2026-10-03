@@ -12846,12 +12846,9 @@ async function _regenVariantsD(m,div){/* v314-d DeepSeek 式重新生成：旧�
     if(_chatSendingFor&&_chatSendingFor.has(m.friendId)){toast('TA 正在回复中');return}
     let all=[];try{all=await dbGetByIndex('chatMessages','byFriend',m.friendId)}catch(e){all=[]}
     const mine=all.filter(x=>x&&!x.callFold&&(m.threadId?x.threadId===m.threadId:!x.threadId)).sort((a,b)=>(a.timestamp||0)-(b.timestamp||0));
-    const lastAi=mine.filter(x=>x.role==='assistant').pop();
-    if(!lastAi||lastAi.id!==m.id){/* v314-d4 自愈：胶囊挂错位置时自动挪回最后一条 AI 回复 */
-      try{document.querySelectorAll('.ib-regen-chip').forEach(function(x){x.remove()});const _las=document.querySelectorAll('.chat-msg.ai[data-msg-id]');if(_las.length){const _c=_ibRegenChipD(_las[_las.length-1].dataset.msgId);if(_c)_las[_las.length-1].appendChild(_c)}}catch(e){}
-      toast('只能重新生成最后一条回复');return}
-    const lastU=mine.filter(x=>x.role==='user').pop();
-    window._ibRegenFoldD={cfgId:m.friendId,oldId:m.id,ts:m.timestamp||Date.now(),q:String((lastU&&lastU.content)||'').slice(0,4000),
+    if(m.role==='user')return;
+    const lastU=mine.filter(x=>x.role==='user'&&(x.timestamp||0)<(m.timestamp||0)).pop();/* v314-d5：任意消息重生成——取目标消息之前最近的一条用户消息做记忆门控 */
+    window._ibRegenFoldD={cfgId:m.friendId,oldId:m.id,ts:m.timestamp||Date.now(),cutoffTs:m.timestamp||Date.now(),q:String((lastU&&lastU.content)||'').slice(0,4000),
       variants:(Array.isArray(m.variants)&&m.variants.length)?m.variants.slice():[{content:String(m.content||''),ts:m.timestamp||Date.now(),thinking:String(m.thinking||'')}]};
     try{await dbDelete('chatMessages',m.id)}catch(e){}
     try{/* 摘掉气泡与其上方的思考链/头像行/续发时间（与 deleteSingleMsg 同口径） */
@@ -14887,7 +14884,7 @@ async function sendChatMessage(voiceMsg){
         if(_gCallRes.truncated)aiMsg.truncated=true;/* 任务6 */
         await _musicMaybeDecorateMsgD(aiMsg);
         await dbPut('chatMessages',aiMsg);try{if(typeof _targetFriend!=='undefined'&&window.IBCALLW)IBCALLW.onAiMsg(_targetFriend,aiMsg)}catch(e){}
-        try{const _rf2=window._ibRegenFoldD;if(_rf2&&_rf2.cfgId===_targetFriend){try{await dbDelete('chatMessages',_rf2.oldId)}catch(e){}window._ibRegenFoldD=null}}catch(e){}/* v314-d 重生成成功：新答案已折叠旧回答入库，移除旧记录 */
+        try{const _rf2=window._ibRegenFoldD;if(_rf2&&_rf2.cfgId===_targetFriend){try{await dbDelete('chatMessages',_rf2.oldId)}catch(e){}const _needRepaint=_rf2.cutoffTs!=null;window._ibRegenFoldD=null;if(_needRepaint&&activeFriendId===_targetFriend&&!activeThreadId&&currentPage==='chat'&&typeof selectFriend==='function'){try{await selectFriend(_targetFriend)}catch(e){}}}}catch(e){}/* v314-d5 重生成成功：移除旧记录；中途重生成完成后整屏重绘归位 */
         roundExtras.push(aiMsg);
         if(_gStreamOk){
 
@@ -14992,7 +14989,8 @@ async function sendChatMessage(voiceMsg){
   try{
     const lim=await getReadingLimits();
     _sealTs=await getChatSealTimestamp(_targetFriend,_targetThread||null);
-    const friendMsgs=filterSealed((await dbGetByIndex('chatMessages','byFriend',_targetFriend)).filter(m=>(_targetThread?m.threadId===_targetThread:!m.threadId)&&!m.callFold).sort((a,b)=>a.timestamp-b.timestamp),_sealTs);
+    let friendMsgs=filterSealed((await dbGetByIndex('chatMessages','byFriend',_targetFriend)).filter(m=>(_targetThread?m.threadId===_targetThread:!m.threadId)&&!m.callFold).sort((a,b)=>a.timestamp-b.timestamp),_sealTs);
+    try{const _rfc=window._ibRegenFoldD;if(_rfc&&_rfc.cfgId===_targetFriend&&_rfc.cutoffTs!=null)friendMsgs=friendMsgs.filter(x=>(x.timestamp||0)<_rfc.cutoffTs)}catch(e){}/* v314-d5：任意消息重生成——上下文截到目标消息之前，其后消息不参与 */
 
     let summaryText=null;
     ss=await getSummarySettings();
@@ -15227,8 +15225,9 @@ async function sendChatMessage(voiceMsg){
       var _wsResults=[];
       if(_wsParsed.ops.length)_wsResults=await _execWsOps(_wsParsed.ops,cfg.nickname||cfg.model||'AI',cfg);
       if(_wsParsed.files&&_wsParsed.files.length){try{await _wsArchiveFileBlocks(_wsParsed.files,cfg.nickname||cfg.model||'AI')}catch(e){}}
-      var _wsPhantom=_wsCheckPhantom(_wsParsed.cleanText,_wsParsed.ops.length);
-      streamRefs.forEach(ref=>{_wsFinalizeBubble(ref,replyText,_wsResults)});
+        var _wsPhantom=_wsCheckPhantom(_wsParsed.cleanText,_wsParsed.ops.length);
+        try{const _avS=await _ibAdvProcess(replyText,cfg,{addItem:advAddItem,editItem:advEditItem,delItem:advDelItem,setMeet:advSetMeet,listItems:advListItems});if(_avS){if(_avS.clean!==replyText)replyText=_avS.clean;_avS.cards.forEach(function(_c9){_memR.push({ok:_c9.ok,label:_c9.label,detail:_c9.detail})})}}catch(e){}/* v314-d5：记忆检索/日历标签执行与剥除（此前漏接导致标签原样上屏） */
+        streamRefs.forEach(ref=>{_wsFinalizeBubble(ref,replyText,_wsResults)});
       if(_srchLog.length||_memR.length)streamRefs.forEach(ref=>{_amAppendExtraCards(ref.isTextNode?ref.div:ref.txt,_srchLog,_memR)});
       if(_wsPendingReads.length)streamRefs.forEach(ref=>{(ref.isTextNode?ref.div:ref.txt).appendChild(_buildWsReadHint())});
       if(_brCards.length)streamRefs.forEach(ref=>{_brCards.forEach(function(c){(ref.isTextNode?ref.div:ref.txt).appendChild(_brBuildCard(c))})});
@@ -15269,7 +15268,7 @@ async function sendChatMessage(voiceMsg){
       }catch(e){}
       await _musicMaybeDecorateMsgD(aiMsg);
         await dbPut('chatMessages',aiMsg);try{if(typeof _targetFriend!=='undefined'&&window.IBCALLW)IBCALLW.onAiMsg(_targetFriend,aiMsg)}catch(e){}
-        try{const _rf2=window._ibRegenFoldD;if(_rf2&&_rf2.cfgId===_targetFriend){try{await dbDelete('chatMessages',_rf2.oldId)}catch(e){}window._ibRegenFoldD=null}}catch(e){}/* v314-d 重生成成功：新答案已折叠旧回答入库，移除旧记录 */
+        try{const _rf2=window._ibRegenFoldD;if(_rf2&&_rf2.cfgId===_targetFriend){try{await dbDelete('chatMessages',_rf2.oldId)}catch(e){}const _needRepaint=_rf2.cutoffTs!=null;window._ibRegenFoldD=null;if(_needRepaint&&activeFriendId===_targetFriend&&!activeThreadId&&currentPage==='chat'&&typeof selectFriend==='function'){try{await selectFriend(_targetFriend)}catch(e){}}}}catch(e){}/* v314-d5 重生成成功：移除旧记录；中途重生成完成后整屏重绘归位 */
       streamRefs.forEach(ref=>{
         if(aiMsg.id){ref.div.dataset.msgId=aiMsg.id;const db=document.createElement('button');db.className='chat-msg-del';db.textContent='✕';db.title='删除此消息';db.onclick=function(ev){ev.stopPropagation();deleteSingleMsg(aiMsg.id,ref.div)};ref.div.appendChild(db);
           try{const _vn=_varNavD(aiMsg);if(_vn)ref.div.appendChild(_vn)}catch(e){}/* v314-d 多版本切换条 */
@@ -15310,6 +15309,7 @@ async function sendChatMessage(voiceMsg){
       if(_wsNs.ops.length)_wsRNs=await _execWsOps(_wsNs.ops,cfg.nickname||cfg.model||'AI',cfg);
       if(_wsNs.files&&_wsNs.files.length){try{await _wsArchiveFileBlocks(_wsNs.files,cfg.nickname||cfg.model||'AI')}catch(e){}}
       var _wsNsPhantom=_wsCheckPhantom(_wsNs.cleanText,_wsNs.ops.length);
+      try{const _avN=await _ibAdvProcess(replyText,cfg,{addItem:advAddItem,editItem:advEditItem,delItem:advDelItem,setMeet:advSetMeet,listItems:advListItems});if(_avN){replyText=_avN.clean;_avN.cards.forEach(function(_c9){_memRNs.push({ok:_c9.ok,label:_c9.label,detail:_c9.detail})})}}catch(e){}/* v314-d5：记忆检索/日历标签执行与剥除 */
       const aiMsg={id:'msg_'+Date.now()+'_'+Math.floor(Math.random()*100000),role:'assistant',content:replyText,thinking:thinkingText||undefined,friendId:_targetFriend,timestamp:Date.now()};/* 编号方式与群聊统一：随机后缀防同毫秒碰撞 */
       try{const _rf=window._ibRegenFoldD;if(_rf&&_rf.cfgId===_targetFriend){/* v314-d 重新生成＝多版本：旧回答收进 variants，content 恒等于选中版 */
         aiMsg.variants=(_rf.variants||[]).concat([{content:String(replyText||''),ts:Date.now(),thinking:String(thinkingText||'')}]);
@@ -15324,7 +15324,7 @@ async function sendChatMessage(voiceMsg){
       if(_callResN.truncated)aiMsg.truncated=true;/* 任务6：自动续写轮数用尽仍截断 */
       await _musicMaybeDecorateMsgD(aiMsg);
         await dbPut('chatMessages',aiMsg);try{if(typeof _targetFriend!=='undefined'&&window.IBCALLW)IBCALLW.onAiMsg(_targetFriend,aiMsg)}catch(e){}
-        try{const _rf2=window._ibRegenFoldD;if(_rf2&&_rf2.cfgId===_targetFriend){try{await dbDelete('chatMessages',_rf2.oldId)}catch(e){}window._ibRegenFoldD=null}}catch(e){}/* v314-d 重生成成功：新答案已折叠旧回答入库，移除旧记录 */
+        try{const _rf2=window._ibRegenFoldD;if(_rf2&&_rf2.cfgId===_targetFriend){try{await dbDelete('chatMessages',_rf2.oldId)}catch(e){}const _needRepaint=_rf2.cutoffTs!=null;window._ibRegenFoldD=null;if(_needRepaint&&activeFriendId===_targetFriend&&!activeThreadId&&currentPage==='chat'&&typeof selectFriend==='function'){try{await selectFriend(_targetFriend)}catch(e){}}}}catch(e){}/* v314-d5 重生成成功：移除旧记录；中途重生成完成后整屏重绘归位 */
       if(activeFriendId===_targetFriend&&(!_callX||!activeThreadId)){/* v48 ⑮：通话细发送链不往正开着的话题视图里画 */
         appendChatBubble('ai',replyText,undefined,thinkingText||undefined,aiMsg.id,aiMsg.images,undefined,_wsRNs);
         try{if(Array.isArray(aiMsg.variants)&&aiMsg.variants.length>1)document.querySelectorAll('.chat-msg[data-msg-id="'+aiMsg.id+'"]').forEach(function(el){const _vn=_varNavD(aiMsg);if(_vn)el.appendChild(_vn)})}catch(e){}/* v314-d 多版本切换条 */
@@ -24566,15 +24566,15 @@ async function _ibChatEchoBlock(q,fid){/* v288 旧对话回响：从云端原始
     const ac=(typeof AbortController!=='undefined')?new AbortController():null;
     const tm=ac?setTimeout(function(){try{ac.abort()}catch(e){}},8000):null;
     let j=null;
-    try{const r=await fetch(String(c.serverUrl).replace(/\/+$/,'')+'/chat_search',{method:'POST',headers:{'Content-Type':'application/json','X-Sync-Token':c.token},body:JSON.stringify({query:q.slice(0,300),friendId:String(fid),limit:4}),signal:ac?ac.signal:undefined});if(!r.ok)return'';j=await r.json()}
+    try{const r=await fetch(String(c.serverUrl).replace(/\/+$/,'')+'/chat_search',{method:'POST',headers:{'Content-Type':'application/json','X-Sync-Token':c.token},body:JSON.stringify({query:q.slice(0,300),friendId:String(fid),limit:6}),signal:ac?ac.signal:undefined});if(!r.ok)return'';j=await r.json()}
     catch(e){return''}finally{if(tm)clearTimeout(tm)}
     const hits=(j&&j.hits)||[];const seen={};const lines=[];
     for(const h of hits){
       const sn=String(h.snippet||'').replace(/\s+/g,' ').trim();if(!sn)continue;
       const k=sn.slice(0,40);if(seen[k])continue;seen[k]=1;
       let d='';try{const dt=new Date(Number(h.ts)||0);if(!isNaN(dt.getTime()))d=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0')}catch(e){}
-      lines.push('- '+(d?'('+d+' · '+(h.role==='user'?'用户':'你')+'说过) ':'')+sn.slice(0,160));
-      if(lines.length>=3)break;
+      lines.push('- '+(d?'('+d+' · '+(h.role==='user'?'用户':'你')+'说过) ':'')+sn.slice(0,200));
+      if(lines.length>=5)break;
     }
     try{/* v314-d2 可观测：聊天记录检索结果记账（命中数+首条片段），养护抽屉「旧对话回响日志」可见 */
       const s=(await dbGet('apiSettings','memEchoLog'))||{id:'memEchoLog',items:[]};const items=s.items||[];
