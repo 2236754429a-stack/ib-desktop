@@ -12847,7 +12847,9 @@ async function _regenVariantsD(m,div){/* v314-d DeepSeek 式重新生成：旧�
     let all=[];try{all=await dbGetByIndex('chatMessages','byFriend',m.friendId)}catch(e){all=[]}
     const mine=all.filter(x=>x&&!x.callFold&&(m.threadId?x.threadId===m.threadId:!x.threadId)).sort((a,b)=>(a.timestamp||0)-(b.timestamp||0));
     const lastAi=mine.filter(x=>x.role==='assistant').pop();
-    if(!lastAi||lastAi.id!==m.id){toast('只能重新生成最后一条回复');return}
+    if(!lastAi||lastAi.id!==m.id){/* v314-d4 自愈：胶囊挂错位置时自动挪回最后一条 AI 回复 */
+      try{document.querySelectorAll('.ib-regen-chip').forEach(function(x){x.remove()});const _las=document.querySelectorAll('.chat-msg.ai[data-msg-id]');if(_las.length){const _c=_ibRegenChipD(_las[_las.length-1].dataset.msgId);if(_c)_las[_las.length-1].appendChild(_c)}}catch(e){}
+      toast('只能重新生成最后一条回复');return}
     const lastU=mine.filter(x=>x.role==='user').pop();
     window._ibRegenFoldD={cfgId:m.friendId,oldId:m.id,ts:m.timestamp||Date.now(),q:String((lastU&&lastU.content)||'').slice(0,4000),
       variants:(Array.isArray(m.variants)&&m.variants.length)?m.variants.slice():[{content:String(m.content||''),ts:m.timestamp||Date.now(),thinking:String(m.thinking||'')}]};
@@ -12908,6 +12910,37 @@ function _regenBtnD(m){/* v314-d2 实时气泡（流式/非流式）上的 ↻�
     rb.onclick=function(ev){ev.stopPropagation();_regenVariantsD(m,rb.closest('.chat-msg')||rb.parentNode)};
     return rb;
   }catch(e){return null}
+}
+function _ibRegenChipD(msgId){/* v314-d4 DeepSeek 式可见"重新生成"胶囊：明面上挂在最后一条 AI 回复气泡下，不靠悬停发现 */
+  try{
+    if(!msgId)return null;
+    const chip=document.createElement('div');
+    chip.className='ib-regen-chip';
+    chip.dataset.msgId=String(msgId);
+    chip.textContent='↻ 重新生成';
+    chip.title='重新生成这条回复（旧回答保留，可 ‹ i/n › 切换版本）';
+    chip.style.cssText='display:inline-flex;align-items:center;gap:4px;margin:4px 0 2px;padding:3px 10px;border-radius:999px;background:rgba(128,128,128,.12);color:inherit;font-size:12px;cursor:pointer;opacity:.85;width:max-content';
+    chip.onclick=function(ev){ev.stopPropagation();_ibRegenChipRun(ev.currentTarget)};
+    return chip;
+  }catch(e){return null}
+}
+async function _ibRegenChipRun(chip){
+  try{
+    chip.style.opacity='.5';
+    const m=await dbGet('chatMessages',chip.dataset.msgId);
+    if(!m){toast('找不到这条消息');chip.style.opacity='';return}
+    const el=document.querySelector('.chat-msg[data-msg-id="'+chip.dataset.msgId+'"]');
+    await _regenVariantsD(m,el);
+  }catch(e){}
+}
+function _ibAttachRegenChip(container){/* 渲染收尾：清掉旧胶囊，把"重新生成"挂到最后一条 AI 回复 */
+  try{
+    container.querySelectorAll('.ib-regen-chip').forEach(function(x){x.remove()});
+    const as=container.querySelectorAll('.chat-msg.ai[data-msg-id]');
+    if(!as.length)return;
+    const c=_ibRegenChipD(as[as.length-1].dataset.msgId);
+    if(c)as[as.length-1].appendChild(c);
+  }catch(e){}
 }
 function _buildMsgEl(m,isFullscreen,isGroupCont){
 
@@ -13069,6 +13102,7 @@ function _renderAllChat(container,msgs,isFullscreen){
   try{frag.querySelectorAll('.chat-msg').forEach(function(el){el.classList.add('bs-static')})}catch(e){}/* v49d：历史消息即开即现，不做进场动画 */
   container.appendChild(frag);
   _chatWinBind(container);
+  _ibAttachRegenChip(container);/* v314-d4 可见"重新生成"胶囊 */
   _chatWinPin(container,st);
   /* 封档线：渲染完成后注入视觉分隔符 */
   _injectSealDivider(container,msgs);
@@ -15240,6 +15274,7 @@ async function sendChatMessage(voiceMsg){
         if(aiMsg.id){ref.div.dataset.msgId=aiMsg.id;const db=document.createElement('button');db.className='chat-msg-del';db.textContent='✕';db.title='删除此消息';db.onclick=function(ev){ev.stopPropagation();deleteSingleMsg(aiMsg.id,ref.div)};ref.div.appendChild(db);
           try{const _vn=_varNavD(aiMsg);if(_vn)ref.div.appendChild(_vn)}catch(e){}/* v314-d 多版本切换条 */
           try{const _rb=_regenBtnD(aiMsg);if(_rb){_rb.onclick=function(ev){ev.stopPropagation();_regenVariantsD(aiMsg,ref.div)};ref.div.appendChild(_rb)}}catch(e){}/* v314-d2 实时气泡 ↻ */
+          try{const _c=_ibRegenChipD(aiMsg.id);if(_c)ref.div.appendChild(_c)}catch(e){}/* v314-d4 可见重新生成胶囊 */
           if(typeof _chatSelectMode!=='undefined'&&_chatSelectMode&&ref.full&&!ref.div.querySelector('.chat-sel-circle')){const sc=document.createElement('div');sc.className='chat-sel-circle';sc.onclick=function(ev){ev.stopPropagation();_toggleMsgSel(aiMsg.id,sc)};ref.div.appendChild(sc)}/* BUGFIX: Select 模式中流式完成的消息补圈 */}
         if(aiMsg.truncated&&ref.full)ref.txt.appendChild(_buildContinuePill(aiMsg.id));/* 任务6 */
       });
@@ -15294,6 +15329,7 @@ async function sendChatMessage(voiceMsg){
         appendChatBubble('ai',replyText,undefined,thinkingText||undefined,aiMsg.id,aiMsg.images,undefined,_wsRNs);
         try{if(Array.isArray(aiMsg.variants)&&aiMsg.variants.length>1)document.querySelectorAll('.chat-msg[data-msg-id="'+aiMsg.id+'"]').forEach(function(el){const _vn=_varNavD(aiMsg);if(_vn)el.appendChild(_vn)})}catch(e){}/* v314-d 多版本切换条 */
         try{document.querySelectorAll('.chat-msg[data-msg-id="'+aiMsg.id+'"]').forEach(function(el){const _rb=_regenBtnD(aiMsg);if(_rb){_rb.onclick=function(ev){ev.stopPropagation();_regenVariantsD(aiMsg,el)};el.appendChild(_rb)}})}catch(e){}/* v314-d2 实时气泡 ↻ */
+        try{document.querySelectorAll('.chat-msg[data-msg-id="'+aiMsg.id+'"]').forEach(function(el){const _c=_ibRegenChipD(aiMsg.id);if(_c)el.appendChild(_c)})}catch(e){}/* v314-d4 可见重新生成胶囊 */
         if(_srchLogN.length||_memRNs.length)document.querySelectorAll('.chat-msg[data-msg-id="'+aiMsg.id+'"]').forEach(function(el){_amAppendExtraCards(el,_srchLogN,_memRNs)});/* 任务A：非流式也显示搜索/记忆卡 */
         if(_wsPendingReads.length)document.querySelectorAll('.chat-msg[data-msg-id="'+aiMsg.id+'"]').forEach(function(el){el.appendChild(_buildWsReadHint())});
         if(_brCardsNs.length)document.querySelectorAll('.chat-msg[data-msg-id="'+aiMsg.id+'"]').forEach(function(el){_brCardsNs.forEach(function(c){el.appendChild(_brBuildCard(c))})});
