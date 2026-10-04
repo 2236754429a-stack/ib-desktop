@@ -24581,12 +24581,20 @@ async function _ibCareSelfTestD(){
 async function _ibChatEchoBlock(q,fid){/* v288 旧对话回响：从云端原始聊天记录捞相关片段（chat_search 关键词+向量双路），记忆库之外的兜底；失败/超时静默跳过 */
   try{
     q=String(q||'').trim();if(q.length<2||!fid)return'';
+    var sq=q;
+    try{/* v314-d13：查询构造升级——"找到了吗"这类指代短句单独搜必然跑偏，把最近几条你的消息并进查询（最新在前），话题词随上下文进来 */
+      var _ms=await dbGetByIndex('chatMessages','byFriend',fid);
+      var _us=_ms.filter(function(m){return m&&m.role==='user'&&String(m.content||'').trim().length>=2}).sort(function(a,b){return (a.timestamp||0)-(b.timestamp||0)}).slice(-4).reverse();
+      var _parts=_us.map(function(m){return String(m.content||'').replace(/\s+/g,' ').trim().slice(0,150)});
+      if(_parts.length&&_parts[0]===sq)_parts.shift();
+      if(_parts.length)sq=(q+' '+_parts.join(' ')).slice(0,900);
+    }catch(e){}
     const c=(typeof IBSyncClient!=='undefined'&&IBSyncClient.getCfg)?IBSyncClient.getCfg():null;
     if(!c||!c.serverUrl||!c.token)return'';
     const ac=(typeof AbortController!=='undefined')?new AbortController():null;
     const tm=ac?setTimeout(function(){try{ac.abort()}catch(e){}},8000):null;
     let j=null;
-    try{const r=await fetch(String(c.serverUrl).replace(/\/+$/,'')+'/chat_search',{method:'POST',headers:{'Content-Type':'application/json','X-Sync-Token':c.token},body:JSON.stringify({query:q.slice(0,300),friendId:String(fid),limit:8}),signal:ac?ac.signal:undefined});if(!r.ok)return'';j=await r.json()}
+    try{const r=await fetch(String(c.serverUrl).replace(/\/+$/,'')+'/chat_search',{method:'POST',headers:{'Content-Type':'application/json','X-Sync-Token':c.token},body:JSON.stringify({query:sq.slice(0,900),friendId:String(fid),limit:8}),signal:ac?ac.signal:undefined});if(!r.ok)return'';j=await r.json()}
     catch(e){return''}finally{if(tm)clearTimeout(tm)}
     const hits=(j&&j.hits)||[];const seen={};const lines=[];
     for(const h of hits){
@@ -24598,7 +24606,7 @@ async function _ibChatEchoBlock(q,fid){/* v288 旧对话回响：从云端原始
     }
     try{/* v314-d2 可观测：聊天记录检索结果记账（命中数+首条片段），养护抽屉「旧对话回响日志」可见 */
       const s=(await dbGet('apiSettings','memEchoLog'))||{id:'memEchoLog',items:[]};const items=s.items||[];
-      items.push({ts:Date.now(),q:String(q).slice(0,80),n:lines.length,snip:lines.length?String(lines[0]).replace(/^- /,'').slice(0,110):''});
+      items.push({ts:Date.now(),q:String(sq).slice(0,120),n:lines.length,snip:lines.length?String(lines[0]).replace(/^- /,'').slice(0,110):''});
       while(items.length>20)items.shift();await dbPut('apiSettings',{id:'memEchoLog',items:items})}catch(e){}
     try{window._ibEchoLastD={q:String(q).slice(0,80),n:lines.length,items:lines}}catch(e){}/* v314-d11：卡片携带全部命中（最多 8 条），TA 只注入前 6 条 *//* v314-d6：本轮回响结果暂存，落库时折进消息记录 → 气泡卡片可见 */
     if(!lines.length)return'';
