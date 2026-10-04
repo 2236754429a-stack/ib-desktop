@@ -8288,7 +8288,7 @@ i would like the room to be enough.
 const DB_NAME='InternalBeyondDB',DB_VER=16;let db;/* v287-d：+memVectors（记忆向量，仅本地不进同步），两端同轮 15→16 */
 /* v314 版本自检：部署新版后旧页面自动发现并刷新一次（ib-ver.txt 随部署同步更新；每标签只自动刷一次防死循环） */
 (function(){
-  var B='20261004-var13';try{window.IB_BUILD=B}catch(e){}/* 构建号必须与部署的 ib-ver.txt 同步更新，版本自检才有意义 */
+  var B='20261004-var16';try{window.IB_BUILD=B}catch(e){}/* 构建号必须与部署的 ib-ver.txt 同步更新，版本自检才有意义 */
   try{
     var _chk=function(){fetch((location.pathname.replace(/[^/]*$/,'')||'./')+'ib-ver.txt?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():''}).then(function(v){
       v=String(v||'').trim();
@@ -15079,7 +15079,7 @@ async function sendChatMessage(voiceMsg){
     }
     if(cfg.imageGen)sysContent+=_IMGGEN_INSTR_BLOCK;
     if(await _askGlobalGet())sysContent+=_ASK_INSTR_BLOCK;/* v55：选项卡改全局开关（会话内稳定，缓存友好） */
-    try{var _advI=await _ibAdvGet();if(_advI.memSearch)sysContent+=_MEMSEARCH_INSTR_BLOCK;if(_advI.calWrite)sysContent+=_CALWRITE_INSTR_BLOCK;if(_advI.blogWrite)sysContent+=_BLOGWRITE_INSTR_BLOCK;/* v84 */if(_advI.beyond&&cfg&&cfg.beyond&&cfg.beyond.on)sysContent+=await _ibBeyondInstrD(cfg)}catch(e){}
+    try{var _advI=await _ibAdvGet();sysContent+=_CHATSEARCH_INSTR_BLOCK;if(_advI.memSearch)sysContent+=_MEMSEARCH_INSTR_BLOCK;if(_advI.calWrite)sysContent+=_CALWRITE_INSTR_BLOCK;if(_advI.blogWrite)sysContent+=_BLOGWRITE_INSTR_BLOCK;/* v84 */if(_advI.beyond&&cfg&&cfg.beyond&&cfg.beyond.on)sysContent+=await _ibBeyondInstrD(cfg)}catch(e){}
     if(cfg&&cfg.memWrite)sysContent+=_MEMWRITE_INSTR_BLOCK;/* v76 r2：记忆库写入（每 AI，cfg.memWrite）；切换开关后下一条消息重建一次提示缓存，与手机端同策略 */
     try{if(!_vNative&&Array.isArray(history)&&history.some(function(m9){return m9&&m9.role==='user'&&m9.voice}))sysContent+=_VOICEMSG_TONE_NOTE}catch(e){}
     try{if(window.IBCALLW&&IBCALLW.sysExtra){var _ibcX=await IBCALLW.sysExtra(cfg);if(_ibcX)sysContent+=_ibcX}}catch(e){}
@@ -15242,7 +15242,7 @@ async function sendChatMessage(voiceMsg){
       if(_wsParsed.ops.length)_wsResults=await _execWsOps(_wsParsed.ops,cfg.nickname||cfg.model||'AI',cfg);
       if(_wsParsed.files&&_wsParsed.files.length){try{await _wsArchiveFileBlocks(_wsParsed.files,cfg.nickname||cfg.model||'AI')}catch(e){}}
         var _wsPhantom=_wsCheckPhantom(_wsParsed.cleanText,_wsParsed.ops.length);
-        try{const _avS=await _ibAdvProcess(replyText,cfg,{addItem:advAddItem,editItem:advEditItem,delItem:advDelItem,setMeet:advSetMeet,listItems:advListItems});if(_avS){if(_avS.clean!==replyText)replyText=_avS.clean;_avS.cards.forEach(function(_c9){_memR.push({ok:_c9.ok,label:_c9.label,detail:_c9.detail})})}}catch(e){replyText=String(replyText||'').replace(_ADV_TAG_RE,'').replace(/\n{3,}/g,'\n\n').replace(/[ \t]+\n/g,'\n').trim()}/* v314-d7：标签必剥——执行失败也不能上屏 */
+        try{const _avS=await _ibAdvProcess(replyText,cfg,{addItem:(typeof advAddItem!=='undefined')?advAddItem:null,editItem:(typeof advEditItem!=='undefined')?advEditItem:null,delItem:(typeof advDelItem!=='undefined')?advDelItem:null,setMeet:(typeof advSetMeet!=='undefined')?advSetMeet:null,listItems:(typeof advListItems!=='undefined')?advListItems:null});if(_avS){if(_avS.clean!==replyText)replyText=_avS.clean;_avS.cards.forEach(function(_c9){_memR.push({ok:_c9.ok,label:_c9.label,detail:_c9.detail})})}}catch(e){replyText=String(replyText||'').replace(_ADV_TAG_RE,'').replace(/\n{3,}/g,'\n\n').replace(/[ \t]+\n/g,'\n').trim()}/* v314-d7：标签必剥——执行失败也不能上屏 */
         streamRefs.forEach(ref=>{_wsFinalizeBubble(ref,replyText,_wsResults)});
       if(_srchLog.length||_memR.length)streamRefs.forEach(ref=>{_amAppendExtraCards(ref.isTextNode?ref.div:ref.txt,_srchLog,_memR)});
       if(_wsPendingReads.length)streamRefs.forEach(ref=>{(ref.isTextNode?ref.div:ref.txt).appendChild(_buildWsReadHint())});
@@ -15327,7 +15327,7 @@ async function sendChatMessage(voiceMsg){
       if(_wsNs.ops.length)_wsRNs=await _execWsOps(_wsNs.ops,cfg.nickname||cfg.model||'AI',cfg);
       if(_wsNs.files&&_wsNs.files.length){try{await _wsArchiveFileBlocks(_wsNs.files,cfg.nickname||cfg.model||'AI')}catch(e){}}
       var _wsNsPhantom=_wsCheckPhantom(_wsNs.cleanText,_wsNs.ops.length);
-      try{const _avN=await _ibAdvProcess(replyText,cfg,{addItem:advAddItem,editItem:advEditItem,delItem:advDelItem,setMeet:advSetMeet,listItems:advListItems});if(_avN){replyText=_avN.clean;_avN.cards.forEach(function(_c9){_memRNs.push({ok:_c9.ok,label:_c9.label,detail:_c9.detail})})}}catch(e){replyText=String(replyText||'').replace(_ADV_TAG_RE,'').replace(/\n{3,}/g,'\n\n').replace(/[ \t]+\n/g,'\n').trim()}/* v314-d7：标签必剥——执行失败也不能上屏 */
+      try{const _avN=await _ibAdvProcess(replyText,cfg,{addItem:(typeof advAddItem!=='undefined')?advAddItem:null,editItem:(typeof advEditItem!=='undefined')?advEditItem:null,delItem:(typeof advDelItem!=='undefined')?advDelItem:null,setMeet:(typeof advSetMeet!=='undefined')?advSetMeet:null,listItems:(typeof advListItems!=='undefined')?advListItems:null});if(_avN){replyText=_avN.clean;_avN.cards.forEach(function(_c9){_memRNs.push({ok:_c9.ok,label:_c9.label,detail:_c9.detail})})}}catch(e){replyText=String(replyText||'').replace(_ADV_TAG_RE,'').replace(/\n{3,}/g,'\n\n').replace(/[ \t]+\n/g,'\n').trim()}/* v314-d7：标签必剥——执行失败也不能上屏 */
       const aiMsg={id:'msg_'+Date.now()+'_'+Math.floor(Math.random()*100000),role:'assistant',content:replyText,thinking:thinkingText||undefined,friendId:_targetFriend,timestamp:Date.now()};/* 编号方式与群聊统一：随机后缀防同毫秒碰撞 */
       try{const _rf=window._ibRegenFoldD;if(_rf&&_rf.cfgId===_targetFriend){/* v314-d 重新生成＝多版本：旧回答收进 variants，content 恒等于选中版 */
         aiMsg.variants=(_rf.variants||[]).concat([{content:String(replyText||''),ts:Date.now(),thinking:String(thinkingText||'')}]);
@@ -17136,6 +17136,7 @@ const _ASK_INSTR_BLOCK='\n\n【选项卡】当用户需要在几个明确的选�
 
 /* ═══ 进阶指令（记忆库检索 / 日历写入）：常量块随开关整块注入，结果只挂末条用户消息，前缀不动 ═══ */
 const _MEMSEARCH_INSTR_BLOCK='\n\n【记忆库检索】你可以检索记忆库来核实过往信息。\n用法：<ws_mem_search q="关键词" />\n说明：\n- q 填 1–4 个关键词（空格分隔），系统在对你可见的记忆条目与你的记忆档案中匹配，命中内容在下一条消息回传给你。\n- 在对话涉及过往的人、事件或约定时调用。不确定记过没有时，也可以用来核实。\n- 若未命中，系统会用最长的关键词自动重检一次并在结果中注明；仍未命中就是记忆库里真的没有，不要猜。\n- 不要编造检索结果——等系统回传。';
+const _CHATSEARCH_INSTR_BLOCK='\n\n【聊天记录检索】你可以检索你们过往的原始聊天记录（对话原文，不是记忆库）。\n用法：<ws_chat_search q="关键词" />\n说明：\n- q 填 1–4 个具体词（人名/昵称/事件词），不要抄我的整句话；同形不同物要加限定词区分（例如"小龙 人物"和"小龙虾"是两回事）。\n- 当我提到"之前/上次/我们聊过的"而你想不起细节时调用；命中的原话片段会在下一条消息回传给你。\n- 想找某天聊的内容可以加日期词（如"6月27"）。\n- 未命中就是聊天记录里真没有，不要编造——等系统回传。';/* v314-d21：学 OB breath_search——查询词由模型自己组织 */
 const _VOICEMSG_TONE_NOTE='\n\n【语音消息】语音消息前缀方括号内的声学语气参考是本机对这段录音的声学摘要，供你感知对方语气，自然回应即可，不要复述分析数据。';
 const _CALWRITE_INSTR_BLOCK='\n\n【日历写入】你可以替对方管理日历事项，每条回复最多 2 次。\n标签：\n<ws_cal_list/>\n<ws_cal_add kind="类型" date="YYYY-MM-DD" title="标题" end="YYYY-MM-DD" note="备注" />\n<ws_cal_edit id="事项id" date="新日期" title="新标题" note="新备注" />\n<ws_cal_del id="事项id" />\n<ws_cal_meet date="YYYY-MM-DD" />\n字段说明：\n- ws_cal_list 查询你有权限看到的全部日程，第一条为与对方的相遇纪念日，逐条附 id，结果在下一条消息回传。\n- kind：anniv（纪念日）、birthday（生日）、plan（计划）、memo（记录）。纪念日与生日按年重复，计划与记录为单次。\n- date：必填，YYYY-MM-DD 格式。\n- title：必填，事项标题（40字内）。\n- end：选填，仅 plan / memo 有效，标记结束日期。\n- note：选填，备注（120字内），会随事项一并提供给有权限的 AI。\n- id：编辑或删除时必填，先用 <ws_cal_list/> 查询获取（或取自上一轮回传），不要臆造。\n- ws_cal_meet 用于更正你与对方的相遇纪念日，仅在对方明确告知日期时使用。\n执行结果在下一条消息回传给你。';
 var _advCache=null;
@@ -18251,10 +18252,39 @@ async function _ibMemSearchExec(cfg,q){
   if(dropped)lines.push('（另有 '+dropped+' 条命中因超出单次回传上限未展示，可换更精确的关键词再检索）');
   return{ok:true,label:'检索记忆库 ·「'+kws.join(' ')+'」· 命中 '+hits.length+' 条',detail:lines.join('\n')};
 }
-var _ADV_TAG_RE=/<ws_(mem_search|cal_add|cal_edit|cal_del|cal_meet|cal_list)\b([^>]*?)\/?>/gi;/* v6：+cal_list（任务1） */
+var _ADV_TAG_RE=/<ws_(mem_search|chat_search|cal_add|cal_edit|cal_del|cal_meet|cal_list)\b([^>]*?)\/?>/gi;/* v6：+cal_list（任务1）；v314-d21：+chat_search（主动检索聊天记录，学 OB breath_search） */
+function _ibCalApiD(){/* v314-d21 防御式 calApi：日历执行函数可能在闭包内不可达，缺失时明确降级而不是抛错吞掉整个 adv 流程 */
+  try{
+    return {
+      addItem:(typeof advAddItem!=='undefined')?advAddItem:null,
+      editItem:(typeof advEditItem!=='undefined')?advEditItem:null,
+      delItem:(typeof advDelItem!=='undefined')?advDelItem:null,
+      setMeet:(typeof advSetMeet!=='undefined')?advSetMeet:null,
+      listItems:(typeof advListItems!=='undefined')?advListItems:null
+    };
+  }catch(e){return {}}
+}
+async function _ibChatSearchExec(cfg,q){/* v314-d21 聊天记录主动检索（学 OB breath_search：查询词由模型自己写） */
+  try{
+    q=String(q||'').trim();if(!q)return {ok:false,label:'聊天记录检索',detail:'q 为空'};
+    const c=(typeof IBSyncClient!=='undefined'&&IBSyncClient.getCfg)?IBSyncClient.getCfg():null;
+    if(!c||!c.serverUrl||!c.token)return {ok:false,label:'聊天记录检索',detail:'同步未配置'};
+    const ac=(typeof AbortController!=='undefined')?new AbortController():null;
+    const tm=ac?setTimeout(function(){try{ac.abort()}catch(e){}},8000):null;
+    let j=null;
+    try{const r=await fetch(String(c.serverUrl).replace(/\/+$/,'')+'/chat_search',{method:'POST',headers:{'Content-Type':'application/json','X-Sync-Token':c.token},body:JSON.stringify({query:q.slice(0,300),friendId:cfg.id,limit:5}),signal:ac?ac.signal:undefined});if(!r.ok)throw new Error('HTTP '+r.status);j=await r.json()}
+    catch(e){return {ok:false,label:'聊天记录检索失败',detail:String(e&&e.message||e).slice(0,80)}}
+    finally{if(tm)clearTimeout(tm)}
+    const hs=((j&&j.hits)||[]);
+    if(!hs.length)return {ok:true,label:'聊天记录检索「'+q.slice(0,20)+'」',detail:'未命中——过往聊天记录里没有相关内容，不要编造'};
+    const f=((j&&j.focus)||[]).slice(0,5);
+    const lines=hs.slice(0,4).map(function(h){var d=new Date(Number(h.ts)||0);var t=isNaN(d)?'':(d.getMonth()+1)+'月'+d.getDate()+'日 ';return t+(h.role==='user'?'你':'我')+':'+String(h.snippet||'').slice(0,100)});
+    return {ok:true,label:'聊天记录检索「'+q.slice(0,20)+'」命中 '+hs.length+' 条',detail:lines.join('；')+(f.length?'（焦点词：'+f.join(' ')+'）':'')};
+  }catch(e){return {ok:false,label:'聊天记录检索失败',detail:String(e&&e.message||e).slice(0,80)}}
+}
 async function _ibAdvProcess(text,cfg,calApi){
   var out={clean:text,cards:[]};
-  if(!text||!/<ws_(mem_search|cal_add|cal_edit|cal_del|cal_meet|cal_list)\b/i.test(String(text)))return out;
+  if(!text||!/<ws_(mem_search|chat_search|cal_add|cal_edit|cal_del|cal_meet|cal_list)\b/i.test(String(text)))return out;/* v314-d21：+chat_search（守卫与 _ADV_TAG_RE 同步，勿漏） */
   var adv=await _ibAdvGet(),ops=[];
   out.clean=String(text).replace(_ADV_TAG_RE,function(_m,kind,attrs){ops.push({kind:String(kind).toLowerCase(),a:attrs||''});return ''}).replace(/\n{3,}/g,'\n\n').replace(/[ \t]+\n/g,'\n').trim();
   var nCal=0,nS=0;
@@ -18263,6 +18293,8 @@ async function _ibAdvProcess(text,cfg,calApi){
     if(op.kind==='mem_search'){
       if(!adv.memSearch)r={ok:false,label:'记忆库检索未执行',detail:'用户未开启「记忆库检索」，请不要再输出该标签'};
       else r=await _ibMemSearchExec(cfg,_advAttr(a,'q')||_advAttr(a,'query'));
+    }else if(op.kind==='chat_search'){
+      r=await _ibChatSearchExec(cfg,_advAttr(a,'q')||_advAttr(a,'query'));
     }else{
       if(!adv.calWrite)r={ok:false,label:'日历写入未执行',detail:'用户未开启「日历写入」，请不要再输出该标签'};
       else if(!calApi)r={ok:false,label:'日历写入未执行',detail:'日历模块未就绪'};
@@ -28049,7 +28081,7 @@ async function processReply(replyText,cfg){
     if(!replyText)return out;
     if(typeof window._ibAdvProcess==='function'){
       try{
-        var _av=await window._ibAdvProcess(out.clean,cfg,{addItem:advAddItem,editItem:advEditItem,delItem:advDelItem,setMeet:advSetMeet,listItems:advListItems});
+        var _av=await window._ibAdvProcess(out.clean,cfg,{addItem:(typeof advAddItem!=='undefined')?advAddItem:null,editItem:(typeof advEditItem!=='undefined')?advEditItem:null,delItem:(typeof advDelItem!=='undefined')?advDelItem:null,setMeet:(typeof advSetMeet!=='undefined')?advSetMeet:null,listItems:(typeof advListItems!=='undefined')?advListItems:null});
         if(_av){out.clean=_av.clean;replyText=_av.clean;if(_av.cards&&_av.cards.length)out.results=out.results.concat(_av.cards)}
       }catch(e){}
     }
