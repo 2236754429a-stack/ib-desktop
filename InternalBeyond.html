@@ -24596,7 +24596,7 @@ async function _ibChatEchoBlock(q,fid){/* v288 旧对话回响：从云端原始
     const ac=(typeof AbortController!=='undefined')?new AbortController():null;
     const tm=ac?setTimeout(function(){try{ac.abort()}catch(e){}},8000):null;
     let j=null;
-    try{const r=await fetch(String(c.serverUrl).replace(/\/+$/,'')+'/chat_search',{method:'POST',headers:{'Content-Type':'application/json','X-Sync-Token':c.token},body:JSON.stringify({query:q.slice(0,300),context:ctxStr.slice(0,1200),friendId:String(fid),limit:8}),signal:ac?ac.signal:undefined});if(!r.ok)return'';j=await r.json()}
+    try{const r=await fetch(String(c.serverUrl).replace(/\/+$/,'')+'/chat_search',{method:'POST',headers:{'Content-Type':'application/json','X-Sync-Token':c.token},body:JSON.stringify({query:q.slice(0,300),context:ctxStr.slice(0,1200),prev:(q.length<=20?(localStorage.getItem('ib_echo_lastfocus')||''):''),friendId:String(fid),limit:8}),signal:ac?ac.signal:undefined});if(!r.ok)return'';j=await r.json()}
     catch(e){return''}finally{if(tm)clearTimeout(tm)}
     const hits=(j&&j.hits)||[];const seen={};const lines=[];
     for(const h of hits){
@@ -24610,7 +24610,8 @@ async function _ibChatEchoBlock(q,fid){/* v288 旧对话回响：从云端原始
       const s=(await dbGet('apiSettings','memEchoLog'))||{id:'memEchoLog',items:[]};const items=s.items||[];
       items.push({ts:Date.now(),q:String(q).slice(0,40)+' ⇒ '+((j&&j.focus)||[]).slice(0,6).join(' '),n:lines.length,snip:lines.length?String(lines[0]).replace(/^- /,'').slice(0,110):''});
       while(items.length>20)items.shift();await dbPut('apiSettings',{id:'memEchoLog',items:items})}catch(e){}
-    try{window._ibEchoLastD={q:String(q).slice(0,80),f:((j&&j.focus)||[]).slice(0,6),n:lines.length,items:lines}}catch(e){}/* v314-d16：焦点词随卡片可见 *//* v314-d6：本轮回响结果暂存，落库时折进消息记录 → 气泡卡片可见 */
+    try{window._ibEchoLastD={q:String(q).slice(0,80),f:((j&&j.focus)||[]).slice(0,6),n:lines.length,items:lines}}catch(e){}
+    try{localStorage.setItem('ib_echo_lastfocus',JSON.stringify(((j&&j.focus)||[]).slice(0,8)))}catch(e){}/* v314-d19：焦点词粘性存档——短指代句下轮沿用 *//* v314-d6：本轮回响结果暂存，落库时折进消息记录 → 气泡卡片可见 */
     if(!lines.length)return'';
     return '【旧对话回响（系统参考，勿提及此段）】以下是从过往原始聊天记录里检索到的相关片段，帮你想起对话源头：\n'+lines.slice(0,6).join('\n');
   }catch(e){return''}
