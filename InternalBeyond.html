@@ -8288,7 +8288,7 @@ i would like the room to be enough.
 const DB_NAME='InternalBeyondDB',DB_VER=16;let db;/* v287-d：+memVectors（记忆向量，仅本地不进同步），两端同轮 15→16 */
 /* v314 版本自检：部署新版后旧页面自动发现并刷新一次（ib-ver.txt 随部署同步更新；每标签只自动刷一次防死循环） */
 (function(){
-  var B='20261003-var1';
+  var B='20261004-var13';try{window.IB_BUILD=B}catch(e){}/* 构建号必须与部署的 ib-ver.txt 同步更新，版本自检才有意义 */
   try{
     var _chk=function(){fetch((location.pathname.replace(/[^/]*$/,'')||'./')+'ib-ver.txt?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():''}).then(function(v){
       v=String(v||'').trim();
@@ -24502,7 +24502,7 @@ async function _ibCareRenderD(box){
   const clamp2=function(t){/* v287-d 两行截断的内容预览：归档/待审要能看到正文才能拍板 */
     const s=String(t==null?'':t).replace(/\s+/g,' ').trim().slice(0,180);
     return s?'<div style="font-size:12px;opacity:.65;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-top:2px">'+E(s)+'</div>':''};
-  let h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="font-size:16px">记忆养护</b><button class="btn" style="padding:2px 10px" data-care-close="1">关闭</button></div>';
+  let h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="font-size:16px">记忆养护<span style="opacity:.4;font-size:11px;margin-left:8px;font-weight:400">构建 '+(window.IB_BUILD||'?')+'</span></b><button class="btn" style="padding:2px 10px" data-care-close="1">关闭</button></div>';
   h+='<p class="hint" style="opacity:.65;margin:0 0 8px">销账只许建议，绝不自动执行（WrenWen 纪律）</p>';
   h+='<div style="font-weight:600;margin:6px 0 4px">待审记忆（'+review.length+'）</div>';
   if(review.length){review.slice(0,10).forEach(function(m){h+='<div style="display:flex;gap:6px;align-items:flex-start;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.2)"><div style="flex:1;min-width:0"><div style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">'+E(m.title||'（无标题）')+'</div>'+clamp2(m.summary||m.content)+'<div style="font-size:12px;opacity:.65;margin-top:2px">'+E(m.reviewNote||'含未核实引语')+'</div></div><button class="btn" style="flex:none;padding:4px 10px" data-care-ok="'+E(m.id)+'">确认无误</button><button class="btn" style="flex:none;padding:4px 10px" data-care-del="'+E(m.id)+'">删除</button></div>'})}
