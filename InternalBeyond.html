@@ -2366,6 +2366,7 @@ body:not(.theme-infernal) .ws-op-text b{color:#0a1e42}
 .ws-op-detail{display:none;width:100%;margin-top:6px;padding:9px 11px;font-family:'Consolas','Courier New',monospace;font-size:0.72rem;line-height:1.65;color:var(--text-muted);max-height:220px;overflow:auto;white-space:pre-wrap;word-break:break-all;background:rgba(10,16,32,0.22);border:1px solid rgba(165,188,230,0.1);border-radius:9px}
 body:not(.theme-infernal) .ws-op-detail{background:rgba(246,249,252,0.4);border-color:rgba(196,212,232,0.34);color:#33486b}
 .ws-op-card.expanded .ws-op-detail{display:block}
+.ws-op-card.mob-card{border-left:2px solid rgba(143,171,214,0.55)} .ws-op-card.mob-card.fail{border-left-color:rgba(217,138,138,0.6)} .mob-tag{font-family:inherit} .mob-tag.ok{color:#6fae8e} .mob-tag.run{color:#d6a45c} .mob-tag.pend{color:#8fabd6} .mob-tag.mob{opacity:.75} .mob-detail{max-height:360px;font-family:inherit} .mob-sec{margin:0 0 9px} .mob-sec-h{font-size:0.62rem;letter-spacing:0.14em;text-transform:uppercase;opacity:0.6;margin-bottom:3px;font-family:inherit} .mob-sec-b{white-space:pre-wrap;word-break:break-word;font-family:'Consolas','Courier New',monospace;font-size:0.72rem;line-height:1.6} .mob-note{font-size:0.66rem;opacity:0.55;margin-top:4px} .chat-sticker{display:block;max-width:120px;max-height:120px;border-radius:10px;margin-top:4px}/* v139 */
 /* ═══ v22-sync：MCP 品牌卡（麦当劳金红 / 瑞幸蓝白，与手机端同款） ═══ */
 .ws-op-card.mcpb{padding:10px 12px 10px 13px;max-width:460px}
 .ws-op-card.mcpb-mcd{background:linear-gradient(135deg,rgba(255,199,44,0.10),rgba(218,41,28,0.05));border-color:rgba(255,199,44,0.42)}
@@ -6799,7 +6800,7 @@ body:not(.theme-infernal) .ibr-col .ibr-host .chat-typing .typing-sec{opacity:0.
         <button class="btn" style="color:#e88;border-color:rgba(200,80,80,0.3)" onclick="clearUploadedFiles()">清除上传文件</button>
         <button class="btn" style="color:#e88;border-color:rgba(200,80,80,0.3)" onclick="_tkWipeAll()">清空 Token 统计</button>
 <button class="btn" style="color:#e88;border-color:rgba(200,80,80,0.3)" onclick="clearAllMusicD()">清空歌单与歌曲分析</button><!-- fix-r4：任务 1 -->
-        <button class="btn" style="color:#e88;border-color:rgba(200,80,80,0.3)" onclick="resetAllData()">重置全站数据</button>
+        <button class="btn" style="color:#e88;border-color:rgba(200,80,80,0.3)" onclick="window._ibVidD&&_ibVidD.clearUI()">清空本机视频</button><!-- v142 --> <button class="btn" style="color:#e88;border-color:rgba(200,80,80,0.3)" onclick="resetAllData()">重置全站数据</button>
       </div>
     </div>
   </div>
@@ -7131,6 +7132,8 @@ i would like the room to be enough.
           <p><strong>进阶指令</strong>：以下能力各自对应一段发给 AI 的指令说明。关闭的项目不会写入提示词，AI 也不会知道有这项能力。全局生效；开关切换后下一条消息会重建一次提示缓存，之后恢复稳定命中。</p>
           <p><strong>选项卡</strong>：AI 提问时可给出候选答案，选项以独立卡片浮现在输入框上方，点选某项或自行输入后作为你的消息发出。对所有 API 与群聊生效。</p>
           <p><strong>记忆库检索</strong>：AI 判断需要回忆或核对过往信息时，可检索记忆库中对它可见的条目与它自己的记忆档案，检索过程与命中结果在聊天中以操作卡显示，结果在下一条消息回传给它。仅在需要时调用，不是每轮都会检索。</p>
+          <p><strong>手机端专属操作卡</strong>：从手机端（APK）导入的聊天记录里，控制手机 / 陪你玩手机 / 锁应用 / 查岗与手机状态 / 付款请求 / 手机闹钟与计时器 / 表情包 / 本地桥工具 / 播放器 / 天气 / 定位等操作，在这里画成与其它指令同款的操作卡：标题与状态（已完成 / 失败 / 待确认 / 进行中）一眼可见，点开分「步骤 / 结果 / 正文 / 代码」看，代码里是原始指令和手机端回执；控制手机的任务卡点开时会把这次任务在手机上的每一步列出来。电脑端只展示、不执行，这些步骤卡也不进 TA 的对话上下文；手机端发的表情包图片照原样显示。</p>
+          <p><strong>视频卡片</strong>：手机端 TA 生成的视频，导入聊天记录后在这里画成拍立得卡片（封面、播放钮、时长、「查看提示词」），点开全屏播放，右上角「保存到电脑」把原文件存进下载目录。视频本体不在聊天记录里，而在单独的「本机媒体库」：手机端导出备份时勾选「连本机媒体库一起导出」，再在这里 Import，卡片就能播放；没带视频的卡片照样显示封面和提示词，并标「视频不在这台电脑」。Export 里也有同样的勾选（默认不勾，格式与手机端一致）；设置底部「清空本机视频」只删这台电脑上的视频本体。电脑端只展示、不生成视频。</p>
           <p><strong>Blog 写入</strong>：进阶指令里的「启用 Blog 写入」开关。开启后 TA 可以在回复里把一段经历写成一篇日志（每条回复最多 1 篇、正文 10000 字），落进 Blog 里以 TA 名字命名的分类、署 TA 的名；聊天里先出「正在写入 Blog」直播卡，写完变成「已写入 Blog ·《标题》」卡，点卡片就地展开看正文。同一开关下 TA 也能修改它自己写过的日志：按标题找，整篇替换正文或改标题（你写的与别的 TA 写的改不了），聊天里出「已修改 Blog」卡；聊天历史里写过的日志只留标题，TA 要改会先把现有全文读回去。这类日志不进【用户最近的 Blog】自动注入、不进信件素材，只有你按标题点名且开了日志检索才会被读到；开关切换后下一条消息重建一次提示缓存。</p>
           <p><strong>分类器拦截后的回退</strong>：API 编辑器里的开关（Claude Fable 5 / Opus 5 服务端回退）。不开＝被拦只在聊天里报错；开了才出现回退方式——官方默认路由，或指定最多 3 个回退模型。请求随之带上 fallbacks，谁接手了会 toast 提示；被拦且无人接手按请求失败展示类别与说明。端点不认 fallbacks 时自动去参重试一次。</p>
           <p><strong>记忆库写入</strong>：在该 API 的功能设置中开启后，TA 可在对话中把值得记住的时刻写入记忆库（每条回复最多 3 次），执行结果以操作卡显示、展开可见完整内容。写入条目仅 TA 可见，可在 Memory 页查看、编辑可见范围或删除；与 Auto Memory 档案相互独立，权限与手机端共用同一开关。</p>
@@ -7475,6 +7478,7 @@ i would like the room to be enough.
 
     <div class="guide-section">
       <h3 id="guide-data">数据管理</h3>
+      <p><strong>导入聊天记录</strong>：<strong>Import</strong> 对话框顶部切到「官方聊天记录」。ChatGPT（设置 → 数据控制 → 导出数据，邮件里的压缩包）与 Claude（Settings → Privacy → Export data）的官方导出可以直接选压缩包，也可以先解压再选 conversations.json；别的应用导出的 JSON / JSONL（如 Operit）也能读，读完在「字段对应」里核对；自己记的逐行文本（.txt，每行「名字：内容」开头）填大致的开始与结束日期，消息按顺序均匀排进这段时间，不用手动加时间戳。选一位好友后默认自动分频道：认得出分段的（每个对话窗口、带标题的 JSON 会话）各建一个话题频道，认不出的全部进一个以文件名命名的频道，主线不受影响；也可以改选「并入主线」。重复导入自动跳过已导入的消息；图片与附件只留占位，工具调用不导入，思考过程可选带上。最近几次导入能在同一页一键撤销。与手机端同一套口径，导入的记录随备份两端互通。</p>
       <p><strong>导出</strong>：导航栏 <strong>Export</strong> 按钮 → 全部数据导出为一个 JSON 文件（日志、分类、信件、聊天记录、话题频道、对话摘要、Blog 评论与批注、API 配置、个人资料、群组设置、记忆库、Auto Memory 档案、ICode 项目与上传文件）。</p>
       <p><strong>导入</strong>：<strong>Import</strong> 按钮 → 选择 JSON 备份文件。增量合并模式——新增数据被添加，已有数据不会被覆盖。</p>
       <p><strong>工作台</strong>：选好文件再点开始，结束后列出各类写入数量。仅 ✕、取消或 Esc 可关闭。</p>
@@ -8288,7 +8292,7 @@ i would like the room to be enough.
 const DB_NAME='InternalBeyondDB',DB_VER=16;let db;/* v287-d：+memVectors（记忆向量，仅本地不进同步），两端同轮 15→16 */
 /* v314 版本自检：部署新版后旧页面自动发现并刷新一次（ib-ver.txt 随部署同步更新；每标签只自动刷一次防死循环） */
 (function(){
-  var B='20261004-var16';try{window.IB_BUILD=B}catch(e){}/* 构建号必须与部署的 ib-ver.txt 同步更新，版本自检才有意义 */
+  var B='20261008-up275-d22';try{window.IB_BUILD=B}catch(e){}/* 构建号必须与部署的 ib-ver.txt 同步更新，版本自检才有意义 */
   try{
     var _chk=function(){fetch((location.pathname.replace(/[^/]*$/,'')||'./')+'ib-ver.txt?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.text():''}).then(function(v){
       v=String(v||'').trim();
@@ -10229,6 +10233,10 @@ function _ioRows(counts){
   }
   return h;
 }
+var _IB_DESK_IDS={main:1,readingLimits:1,imggenSettings:1,ib_bubbleSplit:1,diaryCats:1};
+function _ibDeskOwned(id){id=String(id||'');return !!_IB_DESK_IDS[id]||/^seal_/.test(id)}
+function _ibIsPhoneBackup(d){if(!d||typeof d!=='object')return false;if(d.origin==='desktop')return false;if(d.origin==='mobile')return true;return /^v\d+-[apm]\b/.test(String(d.appVersion||''))}
+async function _ibMergeSettingsD(arr,data){var fromPhone=_ibIsPhoneBackup(data),out=[];window._ibSetKeptD=[];arr=Array.isArray(arr)?arr:[];for(var i=0;i<arr.length;i++){var r=arr[i];if(!r||typeof r!=='object'||!r.id){out.push(r);continue}var id=String(r.id);if(id==='callSettings'){var loc=null;try{loc=await dbGet('apiSettings','callSettings')}catch(e){}if(loc&&typeof loc==='object'){var m=Object.assign({},loc,r),pa={},lp=loc.perApi||{},ip=r.perApi||{};Object.keys(lp).forEach(function(k){pa[k]=Object.assign({},lp[k])});Object.keys(ip).forEach(function(k){pa[k]=Object.assign({},pa[k]||{},ip[k])});m.perApi=pa;r=m}out.push(r);continue}if(fromPhone&&_ibDeskOwned(id)){var l2=null;try{l2=await dbGet('apiSettings',id)}catch(e){}if(l2){if(window._ibSetKeptD.indexOf('电脑端设置')<0)window._ibSetKeptD.push('电脑端设置');continue}}out.push(r)}return out}
 async function ioRun(){
   if(_ioBusy)return;
   if(_ioMode==='import'&&!_ioFile){toast('请先选择存档文件');return}
@@ -10259,7 +10267,7 @@ async function _ioDoExport(){
     data[name]=arr;counts[name]=arr.length;
   }
   if(_wantMedia9&&window._ibVidD){_ioStep('正在读取：本机媒体库（视频）',76);await _ioYield();try{var _md9=await window._ibVidD.exportMedia();if(_md9.length){data.media=_md9;counts.__media=_md9.length}}catch(e){}}
-  data.exportDate=new Date().toISOString();data.version=4;
+  data.exportDate=new Date().toISOString();data.version=4;data.origin='desktop';
   _ioStep('正在生成存档文件（这一步会停顿）…',82,'正在把数据序列化为 JSON。这一步无法拆分，界面会短暂无响应。');
   await _ioYield();
   var str=JSON.stringify(data);
@@ -10286,6 +10294,7 @@ async function _ioDoImport(){
   await _ioYield();
   var data=JSON.parse(String(text||'').replace(/^\ufeff/,''));
   if(!data||typeof data!=='object')throw new Error('文件内容不是有效的存档结构');
+  window._ibSetKeptD=[];
   var list=IB_STORES.filter(function(x){return x!=='music'});
   var counts={},skipped=[],importedRows=[],i,name,arr,done=0;
   for(i=0;i<list.length;i++){
@@ -10293,10 +10302,11 @@ async function _ioDoImport(){
     _ioStep('正在写入：'+(IO_STORE_CN[name]||name)+'（'+(i+1)+'/'+list.length+'）',15+Math.round(i/list.length*75));
     await _ioYield();
     if(!Array.isArray(arr)||!arr.length){counts[name]=0;continue}
+    if(name==='apiSettings'){try{arr=await _ibMergeSettingsD(arr,data)}catch(e){}}
     try{await dbPutAll(name,arr);counts[name]=arr.length;done+=arr.length;if(typeof IBSyncClient!=='undefined'&&IBSyncClient.registerRepublish&&['chatMessages','chatThreads','chatSummaries','memories','autoMemory','calEvents','calNotes','calLedger','posts','categories','letters'].indexOf(name)!==-1)arr.forEach(function(record){importedRows.push({store:name,record:record})})}
     catch(e){counts[name]=e.written||0;done+=counts[name];skipped.push((IO_STORE_CN[name]||name)+'（'+(e.message||'写入失败')+'）')}
   }
-  if(Array.isArray(data.media)&&data.media.length&&window._ibVidD){_ioStep('正在写入：本机媒体库（视频）',92);await _ioYield();try{counts.__media=await window._ibVidD.importMedia(data.media)}catch(e){skipped.push('本机媒体库（'+(e.message||'写入失败')+'）')}}
+  if(Array.isArray(data.media)&&data.media.length&&window._ibVidD){_ioStep('正在写入：本机媒体库（视频）',92);await _ioYield();try{counts.__media=await window._ibVidD.importMedia(data.media);done+=counts.__media}catch(e){skipped.push('本机媒体库（'+(e.message||'写入失败')+'）')}}
   _ioStep('正在刷新站内状态…',94);
   await _ioYield();
   try{await migrateLockedPosts()}catch(e){}
@@ -10314,6 +10324,7 @@ async function _ioDoImport(){
   var extra='';
   if(skipped.length)extra+='以下类别未完整写入（已计入此前成功的批次）：'+esc(skipped.join('、'))+'。<br>';
   if(unknown.length)extra+='存档中有本版本不认识的类别，已忽略：'+esc(unknown.join('、'))+'。<br>';
+  if(window._ibSetKeptD&&window._ibSetKeptD.length)extra+='已保留本机电脑端设置。<br>';
   extra+='导入为合并写入，站内原有而存档中没有的记录未被删除。';
   _ioResult(!skipped.length,'导入完成，共写入 <b>'+done+'</b> 条记录。'
     +(data.exportDate?'<br>存档生成于 '+esc(String(data.exportDate).slice(0,19).replace('T',' ')):''),
@@ -10356,7 +10367,7 @@ async function _ibBuildExportData(){
   async function g(s){try{return await dbGetAll(s)}catch(e){return[]}}
   /* 剔除测试版曾写入的原始流归档字段；保留原版正文、thinking 与其余消息结构。 */
   const cleanChats=(await g('chatMessages')).map(function(m){const c=Object.assign({},m);delete c.upstreamRaw;delete c.thinkingSources;return c});
-  return{posts:await g('posts'),categories:await g('categories'),about:await g('about'),apiSettings:(await g('apiSettings')).filter(function(r){return!(r&&r.id==='ib_fsSyncDir')}),apiConfigs:await g('apiConfigs'),chatMessages:cleanChats,letters:await g('letters'),groups:await loadGroups(),blogComments:await g('blogComments'),memories:await g('memories'),chatThreads:await g('chatThreads'),chatSummaries:await g('chatSummaries'),projects:await g('projects'),projectFiles:await g('projectFiles'),uploadedFiles:await g('uploadedFiles'),blogAnnotations:await g('blogAnnotations'),autoMemory:await g('autoMemory'),calEvents:await g('calEvents'),calNotes:await g('calNotes'),calLedger:await g('calLedger'),feed:await g('feed'),exportDate:new Date().toISOString(),version:4};
+  return{posts:await g('posts'),categories:await g('categories'),about:await g('about'),apiSettings:(await g('apiSettings')).filter(function(r){return!(r&&r.id==='ib_fsSyncDir')}),apiConfigs:await g('apiConfigs'),chatMessages:cleanChats,letters:await g('letters'),groups:await loadGroups(),blogComments:await g('blogComments'),memories:await g('memories'),chatThreads:await g('chatThreads'),chatSummaries:await g('chatSummaries'),projects:await g('projects'),projectFiles:await g('projectFiles'),uploadedFiles:await g('uploadedFiles'),blogAnnotations:await g('blogAnnotations'),autoMemory:await g('autoMemory'),calEvents:await g('calEvents'),calNotes:await g('calNotes'),calLedger:await g('calLedger'),feed:await g('feed'),exportDate:new Date().toISOString(),version:4,origin:'desktop'};
 }
 
 function _ibAutoBakOn(){try{return localStorage.getItem('ib_autoBak')==='1'}catch(e){return false}}/* 默认关闭：仅当用户在面板中手动开启（存 '1'）时生效 */
@@ -10590,7 +10601,7 @@ async function kelivoImportFileChanged(e){
   finally{e.target.value=''}
 }
 
-async function importAll(e){const file=e.target.files[0];if(!file)return;try{const text=await file.text();const data=JSON.parse(text);for(const _s of IB_STORES){if(_s==='music')continue;if(Array.isArray(data[_s])&&data[_s].length){await dbPutAll(_s,data[_s])}}await migrateLockedPosts();try{localStorage.removeItem('ib_guardMuted')}catch(e2){}var _go=document.getElementById('ib-guard-overlay');if(_go){_go.remove();_ibGuardShown=false}_ibToolsCache=null;/* 导入可能带来新的外部工具配置，使缓存失效 */await loadApiConfigs();_refreshCachedUserName();_calEarliest=null;/* 同步刷新内存缓存：API 配置、用户名头像、日历最早日期 */try{if(window.IBCAL&&IBCAL.invalidate)await IBCAL.invalidate()}catch(_e3){}/* fix-r7：同 _ioDoImport，老入口一并重建日历缓存 */try{await _ibMemOneLineRepairD()}catch(_e4){}toast('数据已导入');navTo(currentPage)}catch(err){toast('导入未完成：'+(err&&err.message||'文件格式错误'))}e.target.value=''}
+async function importAll(e){const file=e.target.files[0];if(!file)return;try{const text=await file.text();const data=JSON.parse(text);for(const _s of IB_STORES){if(_s==='music')continue;if(Array.isArray(data[_s])&&data[_s].length){await dbPutAll(_s,_s==='apiSettings'?await _ibMergeSettingsD(data[_s],data):data[_s])}}if(Array.isArray(data.media)&&data.media.length&&window._ibVidD)await window._ibVidD.importMedia(data.media);await migrateLockedPosts();try{localStorage.removeItem('ib_guardMuted')}catch(e2){}var _go=document.getElementById('ib-guard-overlay');if(_go){_go.remove();_ibGuardShown=false}_ibToolsCache=null;/* 导入可能带来新的外部工具配置，使缓存失效 */await loadApiConfigs();_refreshCachedUserName();_calEarliest=null;/* 同步刷新内存缓存：API 配置、用户名头像、日历最早日期 */try{if(window.IBCAL&&IBCAL.invalidate)await IBCAL.invalidate()}catch(_e3){}/* fix-r7：同 _ioDoImport，老入口一并重建日历缓存 */try{await _ibMemOneLineRepairD()}catch(_e4){}toast('数据已导入');navTo(currentPage)}catch(err){toast('导入未完成：'+(err&&err.message||'文件格式错误'))}e.target.value=''}
 function esc(s){if(!s)return'';const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 
 
@@ -12253,7 +12264,16 @@ async function requestLetterFromSelected(){
 
 
     const _amLen=(_amL.sys?_amL.sys.length+2:0)+(_amL.tail?_amL.tail.length+2:0);
-    const response=await callApi(cfg,(_amL.sys?_amL.sys+'\n\n':'')+truncateContext(context,Math.max(2000,8000-reqBlock.length-_amLen))+(_amL.tail?'\n\n'+_amL.tail:'')+reqBlock+(_lwU?'\n\n【'+((about&&about.name)||'用户')+' 的来信】\n'+_lwU.content:''));
+    const _lPrompt=(_amL.sys?_amL.sys+'\n\n':'')+truncateContext(context,Math.max(2000,8000-reqBlock.length-_amLen))+(_amL.tail?'\n\n'+_amL.tail:'')+reqBlock+(_lwU?'\n\n【'+((about&&about.name)||'用户')+' 的来信】\n'+_lwU.content:'');/* v144：写信请求单独成变量，续写时复用 */
+    let _lFin='';const _lOpt={maxTokens:8192,onFin:function(f){_lFin=f}};/* v144：输出上限 4096 → 8192 */
+    let response;
+    try{response=await callApi(cfg,_lPrompt,_lOpt)}catch(e0){if(/\b(402|403)\b|余额|额度|quota|insufficient|credit/i.test(String((e0&&e0.message)||e0))){delete _lOpt.maxTokens;response=await callApi(cfg,_lPrompt,_lOpt)}else throw e0}/* 按 max_tokens 预扣费的中转余额不够时退回原 4096 */
+    const _lTr=function(){return /^(length|max_tokens|max_output_tokens)$/i.test(String(_lFin||''))};
+    for(let _lk=0;_lk<2&&_lTr()&&String(response||'').trim();_lk++){/* 写到一半撞了上限：接着写（最多两轮），不重写已写部分 */
+      try{_lFin='';const _lc=await callApi(cfg,_lPrompt+'\n\n【你刚才写到一半的信（写到这里被截断了）】\n'+response+'\n\n请从断开的地方直接接着写完：只输出接下去的部分，不要重复已经写过的内容，不要加任何说明或标题。',_lOpt);if(!String(_lc||'').trim())break;response+=_lc}catch(e1){break}
+    }
+    let _lThink='';try{const _tm9=String(response||'');if(/<\/think(?:ing)?\s*>/i.test(_tm9)){const _th9=[];const _rp9=_tm9.replace(/<think(?:ing)?\b[^>]*>([\s\S]*?)<\/think(?:ing)?\s*>/gi,function(_m,x){_th9.push(String(x||'').trim());return ''}).trim();if(_rp9){_lThink=_th9.join('\n\n');response=_rp9}}}catch(e){}/* 模型自发写出的成对 <think> 块挪出正文（另存 letter.thinking）；没闭合的不动 */
+    const _lTrunc=_lTr();
 
     let _lm={clean:String(response||''),ops:[]};
     try{_lm=_parseMemOps(String(response||''))}catch(e){}
@@ -12263,13 +12283,13 @@ async function requestLetterFromSelected(){
       return;
     }
 
-    const letter={id:'letter_'+Date.now(),from:_letterSender,content:_lm.clean,friendId:cfg.id,created:Date.now()};
+    const letter={id:'letter_'+Date.now(),from:_letterSender,content:_lm.clean,friendId:cfg.id,created:Date.now()};if(_lThink)letter.thinking=_lThink.slice(0,8000);if(_lTrunc)letter.truncated=true;/* v144 */
     if(isDiablo)letter.isDiablo=true;/* 标记后信封换用无字邮票（回信轮同样适用） */
     if(_lwU){try{await dbPut('letters',{id:_lwU.uid,from:((about&&about.name)||'用户'),userLetter:true,friendId:cfg.id,content:_lwU.content,created:Date.now()});letter.replyTo=_lwU.uid;await dbDelete('letters','ldraft_'+cfg.id).catch(function(){})}catch(e){}}/* 本轮：来信与回信同刻落库、回信记 replyTo；草稿此刻清掉 */
     await dbPut('letters',letter);
     _lastLetterRequestTime=Date.now();/* 只有实际入库成功才开始冷却 */
     loadLetters();
-    toast('收到 '+_letterSender+(letter.replyTo?' 的回信！':' 的新信件！'));
+    toast('收到 '+_letterSender+(letter.replyTo?' 的回信！':' 的新信件！')+(letter.truncated?'（信很长，续写两轮后仍到了上限，结尾可能不完整）':''));
   }catch(e){
     let msg='请求失败';
     if(e.message){
@@ -12751,6 +12771,7 @@ async function callApi(cfg,userMsg,opts){const _co=opts||{},_cmt=Math.max(256,pa
     const ct=res.headers.get('content-type')||'';
     if(ct.includes('text/html')){throw new Error('API端点返回了网页而非JSON——请检查端点URL是否正确（当前格式: '+format+'）。如使用中转站，请确认API地址填写到完整路径（如 https://xxx.com/v1/chat/completions）')}
     const data=await res.json();
+    try{if(_co.onFin)_co.onFin(String((format==='anthropic'?data.stop_reason:(format==='gemini'?(data.candidates&&data.candidates[0]&&data.candidates[0].finishReason):(data.choices&&data.choices[0]&&data.choices[0].finish_reason)))||''))}catch(e){}/* v144：一次性调用可拿到结束原因（写信截断续写用） */
     try{
       if(format==='anthropic'&&data.usage){_tkRecord(cfg,{i:data.usage.input_tokens||0,cr:data.usage.cache_read_input_tokens||0,cw:data.usage.cache_creation_input_tokens||0,o:data.usage.output_tokens||0})}
       else if(format==='gemini'&&data.usageMetadata){var _gu3=data.usageMetadata,_gc3=_gu3.cachedContentTokenCount||0;_tkRecord(cfg,{i:Math.max(0,(_gu3.promptTokenCount||0)-_gc3),cr:_gc3,cw:0,o:(_gu3.candidatesTokenCount||0)+(_gu3.thoughtsTokenCount||0)})}
@@ -12959,7 +12980,8 @@ function _ibAttachRegenChip(container){/* 渲染收尾：清掉旧胶囊，给�
 function _buildMsgEl(m,isFullscreen,isGroupCont){
 
   const frag=document.createDocumentFragment();
-  const isUser=m.role==='user';
+  if(/^\[视频通话快照\]/.test(String(m.content||'')))m=Object.assign({},m,{content:''});
+  const isUser=m.role==='user'&&m.snap!=='ai';
   const _thinkTxt=(!isUser&&m.thinking)?_cleanThinkingText(m.thinking):'';/* 显示端清洗：旧数据中仅为占位符的思考剥空后不展示 */
 
   if(isFullscreen&&!isUser&&_thinkTxt){
@@ -13009,7 +13031,7 @@ function _buildMsgEl(m,isFullscreen,isGroupCont){
         ct.textContent=timeStr;frag.appendChild(ct);
       }
       const txt=document.createElement('div');txt.className='r-text';
-      if(!isUser){_renderAiContent(txt,div,m.content,m.wsResults);if(m.truncated)txt.appendChild(_buildContinuePill(m.id))}else if(m.voice){if(m.content)txt.appendChild(document.createTextNode(m.content));txt.appendChild(_buildVoiceEl(m.voice))}else{txt.textContent=m.content}
+      if(!isUser){_renderAiContent(txt,div,m.content,m.wsResults);if(m.truncated)txt.appendChild(_buildContinuePill(m.id))}else if(m.voice){if(m.content)txt.appendChild(document.createTextNode(m.content));txt.appendChild(_buildVoiceEl(m.voice))}else{txt.textContent=(/^\[视频通话快照\]/.test(String(m.content||''))?'':m.content)}
       div.appendChild(txt);
     }else{
       /* ── Original layout for AI without avatar ── */
@@ -13017,10 +13039,10 @@ function _buildMsgEl(m,isFullscreen,isGroupCont){
       head.innerHTML=esc(sName)+(timeStr?'<span class="r-time">'+timeStr+'</span>':'');
       div.appendChild(head);
       const txt=document.createElement('div');txt.className='r-text';
-      if(!isUser){_renderAiContent(txt,div,m.content,m.wsResults);if(m.truncated)txt.appendChild(_buildContinuePill(m.id))}else if(m.voice){if(m.content)txt.appendChild(document.createTextNode(m.content));txt.appendChild(_buildVoiceEl(m.voice))}else{txt.textContent=m.content}
+      if(!isUser){_renderAiContent(txt,div,m.content,m.wsResults);if(m.truncated)txt.appendChild(_buildContinuePill(m.id))}else if(m.voice){if(m.content)txt.appendChild(document.createTextNode(m.content));txt.appendChild(_buildVoiceEl(m.voice))}else{txt.textContent=(/^\[视频通话快照\]/.test(String(m.content||''))?'':m.content)}
       div.appendChild(txt);
     }
-    if(m.files&&m.files.length)m.files.forEach(function(f){div.appendChild(_buildFileCard(f))});
+    if(m.sticker&&m.sticker.dataUrl){var _sk9=document.createElement('img');_sk9.className='chat-sticker';_sk9.loading='lazy';_sk9.src=m.sticker.dataUrl;_sk9.alt=m.sticker.name||'表情包';div.appendChild(_sk9)}/* v139：手机端发的表情包 */if(m.files&&m.files.length)m.files.forEach(function(f){div.appendChild(_buildFileCard(f))});
     if(m.images&&m.images.length)m.images.forEach(function(img){var el=document.createElement('img');el.className='chat-bubble-img';el.loading='lazy';el.decoding='async';el.src=img.dataUrl;el.alt=img.name||'image';el.onclick=function(){_viewImageFull(img.dataUrl)};div.appendChild(el)});
     if(m.wsSearches||m.memOps)_amAppendExtraCards(div,m.wsSearches||[],m.memOps||[]);
     if(m.calNotes&&window.IBCAL)try{m.calNotes.forEach(function(r){div.appendChild(IBCAL.noteCard(r))})}catch(e){}
@@ -13054,9 +13076,9 @@ function _buildMsgEl(m,isFullscreen,isGroupCont){
       if(m.content)div.appendChild(document.createTextNode(m.content));
       div.appendChild(_buildVoiceEl(m.voice));
     }else{
-      div.textContent=m.content;
+      div.textContent=(/^\[视频通话快照\]/.test(String(m.content||''))?'':m.content);
     }
-    if(m.files&&m.files.length)m.files.forEach(function(f){div.appendChild(_buildFileCard(f))});
+    if(m.sticker&&m.sticker.dataUrl){var _sk9=document.createElement('img');_sk9.className='chat-sticker';_sk9.loading='lazy';_sk9.src=m.sticker.dataUrl;_sk9.alt=m.sticker.name||'表情包';div.appendChild(_sk9)}/* v139：手机端发的表情包 */if(m.files&&m.files.length)m.files.forEach(function(f){div.appendChild(_buildFileCard(f))});
     if(m.images&&m.images.length)m.images.forEach(function(img){var el=document.createElement('img');el.className='chat-bubble-img';el.loading='lazy';el.decoding='async';el.src=img.dataUrl;el.alt=img.name||'image';el.style.maxWidth='180px';el.onclick=function(){_viewImageFull(img.dataUrl)};div.appendChild(el)});
     if(m.wsSearches||m.memOps)_amAppendExtraCards(div,m.wsSearches||[],m.memOps||[]);
     if(m.calNotes&&window.IBCAL)try{m.calNotes.forEach(function(r){div.appendChild(IBCAL.noteCard(r))})}catch(e){}
@@ -13713,15 +13735,60 @@ function _mkLiveMdCleaner(){
 var _WS_OPEN_RE=/<ws_(help|project|read|delete|create|edit|run|tool|gen_image|make_docx|make_pdf|make_xlsx|ask|mem_write|blog_write|blog_edit|post|comment|repost|beyond_view|beyond_inbox|sig)\b([^>]*)>|```file:([^\n]+)\n/gi;
 var _WS_MOB_RE=/<ws_(gen_video|phone_task|see_step|see_lock|see_unlock|see_usage|phone|payreq|alarm_list|alarm_snooze|alarm_off|alarm|timer|sticker|bridge_tool|music|weather|loc|search|ctx)\b([^>]*)>/gi;
 var _IB_MOB_META={gen_video:['生成视频','video'],phone_task:['控制手机','phone'],see_step:['控制手机 · 步骤','step'],see_lock:['锁应用','lock'],see_unlock:['解除锁应用','lock'],see_usage:['查岗 · 看手机','eye'],phone:['查看手机状态','eye'],payreq:['付款请求','pay'],alarm:['手机闹钟','alarm'],alarm_list:['查看手机闹钟','alarm'],alarm_snooze:['闹钟稍后提醒','alarm'],alarm_off:['关闭手机闹钟','alarm'],timer:['计时器','alarm'],sticker:['表情包','smile'],bridge_tool:['本地桥工具','tool'],music:['播放器','music'],weather:['天气','sun'],loc:['定位','pin'],search:['检索工作区','search'],ctx:['读取上下文','search']};
+function _IB_MOB_ICON(k){var p={phone:'<rect x="4.5" y="1.8" width="7" height="12.4" rx="1.6"/><path d="M7.2 12h1.6"/>',step:'<path d="M2.5 4h1.5M2.5 8h1.5M2.5 12h1.5M6 4h7.5M6 8h7.5M6 12h5"/>',lock:'<rect x="3.5" y="7" width="9" height="6.8" rx="1.4"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/>',eye:'<path d="M1.6 8s2.4-4.4 6.4-4.4S14.4 8 14.4 8 12 12.4 8 12.4 1.6 8 1.6 8z"/><circle cx="8" cy="8" r="1.9"/>',pay:'<rect x="1.8" y="4" width="12.4" height="8.4" rx="1.6"/><path d="M1.8 7h12.4M4.5 10h2.5"/>',alarm:'<circle cx="8" cy="8.6" r="5"/><path d="M8 6v2.8l1.8 1.2M3 2.6 1.8 3.8M13 2.6l1.2 1.2"/>',smile:'<circle cx="8" cy="8" r="6"/><path d="M5.6 9.6c.6.9 1.4 1.3 2.4 1.3s1.8-.4 2.4-1.3M6 6.2h.01M10 6.2h.01"/>',tool:'<path d="M10.4 2.2a3.2 3.2 0 0 0-3.6 4.3L2.4 10.9a1.3 1.3 0 0 0 1.8 1.8l4.4-4.4a3.2 3.2 0 0 0 4.3-3.6l-1.9 1.9-1.6-.4-.4-1.6z"/>',music:'<path d="M6 12V3.2l7-1.4V10.6"/><circle cx="4.4" cy="12" r="1.6"/><circle cx="11.4" cy="10.6" r="1.6"/>',sun:'<circle cx="8" cy="8" r="2.8"/><path d="M8 1.6v1.4M8 13v1.4M1.6 8H3M13 8h1.4M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1"/>',pin:'<path d="M8 14.4s4.6-4.3 4.6-7.7a4.6 4.6 0 0 0-9.2 0c0 3.4 4.6 7.7 4.6 7.7z"/><circle cx="8" cy="6.6" r="1.6"/>',search:'<circle cx="7" cy="7" r="4.4"/><path d="M10.4 10.4 14 14"/>',video:'<rect x="1.6" y="3.6" width="9" height="8.8" rx="1.8"/><path d="M10.6 6.6l3.8-2v6.8l-3.8-2z"/>'}[k]||'<rect x="4.5" y="1.8" width="7" height="12.4" rx="1.6"/>';return '<svg class="ws-op-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>'}
 function _ibMobResClean(r){var o={};Object.keys(r||{}).forEach(function(k){var v=r[k];if(typeof v==='string'){if(/^data:/.test(v))v='[图片 '+Math.round(v.length/1024)+' KB]';else if(v.length>600)v=v.slice(0,600)+'…'}else if(Array.isArray(v)&&v.length>12)v=v.slice(0,12).concat(['…共 '+v.length+' 项']);o[k]=v});return o}
+async function _ibMobSteps(card,box){try{var me=card.closest('[data-msg-id]');var id=me&&me.getAttribute('data-msg-id');var m=id?await dbGet('chatMessages',id):null;if(!m){box.textContent='（找不到这条消息，步骤读不出来）';return}
+  var all=[];try{all=await dbGetByIndex('chatMessages','byFriend',m.friendId)}catch(e){try{all=(await dbGetAll('chatMessages')).filter(function(x){return x&&x.friendId===m.friendId})}catch(e2){}}
+  all=all.filter(function(x){return x&&(x.threadId||'')===(m.threadId||'')&&(x.timestamp||0)>(m.timestamp||0)}).sort(function(a,b){return (a.timestamp||0)-(b.timestamp||0)});
+  var lines=[],n=0;for(var i=0;i<all.length;i++){var x=all[i];
+    if(x.seeStep){var rr=(x.wsResults&&x.wsResults[0])||{};n++;var lb=String(rr.label||('第'+n+'步'));var mk=rr.seeAsk?(/→\s*允许/.test(lb)?'✓ 允许':(/→/.test(lb)?'✗ 拒绝':'… 待确认')):(rr.ok===false?'✗':'✓');lines.push(mk+'  '+lb+(rr.ok===false&&rr.reason&&!rr.seeAsk?('（'+rr.reason+'）'):'')+(rr.response&&!rr.seeAsk?('\n      '+String(rr.response).replace(/\s+/g,' ').slice(0,160)):''));continue}
+    if(x.see){lines.push((x.role==='user'?'你':'TA')+'：'+String(x.content||'').replace(/\s+/g,' ').slice(0,120));continue}
+    break}
+  box.textContent=lines.length?lines.join('\n'):'（这次任务在手机上没有留下步骤记录，或记录没有随备份导入）'}catch(e){box.textContent='读取步骤失败：'+((e&&e.message)||e)}}
 function _ibMobCardD(d){
-  if(d.kind==='gen_video'&&window._ibVidD){try{var _vc9=window._ibVidD.card(d);if(_vc9)return _vc9}catch(e){}}
-  var M=_IB_MOB_META[d.kind]||[d.kind,'phone'],r=d.res||null,A=function(k){return _wsAttr(d.attrs||'',k)||''},body=String(d.body||''),detail='';
-  if(d.kind==='phone_task')detail=A('goal')||A('apps');else if(d.kind==='see_step')detail=(r&&r.label)||A('n');else if(d.kind==='payreq')detail=[A('amount')?('¥'+A('amount')):'',A('to')||A('note')||body.slice(0,24)].filter(Boolean).join(' · ');else detail=A('time')||A('at')||A('label')||A('q')||body.slice(0,24);
-  var st='手机端专属',cls='mob';if(r){if(r.running){st='进行中（在手机上）';cls='run'}else if(r.pendingConfirm){st='等待确认';cls='pend'}else if(r.ok===false){st=String(r.reason||'未完成').slice(0,36);cls='fail'}else{st=d.kind==='see_step'?'完成':'已完成';cls='ok'}}
-  var card=document.createElement('div');card.className='ws-op-card mob-card expandable '+cls;card.innerHTML='<span class="ws-op-text">'+esc(M[0])+(detail?' · <b>'+esc(detail)+'</b>':'')+'</span><span class="ws-op-tag mob-tag '+cls+'">'+esc(st)+'</span><svg class="ws-op-chevron" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg>';
-  var det=document.createElement('div');det.className='ws-op-detail mob-detail';det.textContent=(d.body||'')+'\n\n手机端回执：'+(r?JSON.stringify(_ibMobResClean(r),null,2):'未随记录导入');card.appendChild(det);card.onclick=function(){card.classList.toggle('expanded')};return card;
-}
+  if(d.kind==='gen_video'&&window._ibVidD){try{var _vc9=window._ibVidD.card(d);if(_vc9)return _vc9}catch(e){}}/* v142：已生成的视频画成拍立得（封面 + 播放 + 时长 + 查看提示词）；进行中 / 待确认 / 失败仍是下面这张操作卡 */
+  var M=_IB_MOB_META[d.kind]||[d.kind,'phone'],r=d.res||null,A=function(k){return _wsAttr(d.attrs||'',k)||''},body=String(d.body||'');
+  var title=M[0],detail='',mode=(r&&r.mode)||A('mode');
+  if(d.kind==='phone_task'){if(mode==='companion')title='Here · 陪你玩手机';else{detail=(r&&r.goal)||A('goal')||'';var ap=A('apps');if(ap)detail+=(detail?' · ':'')+ap}}
+  else if(d.kind==='see_step'){var n=A('n');title=(r&&r.label)?((n&&n!=='0')?('第'+n+'步 · '+r.label):String(r.label)):('控制手机 · 第'+(n||'?')+'步')}
+  else if(d.kind==='see_lock'||d.kind==='see_unlock')detail=A('apps')||A('pkg')||A('app')||A('name');
+  else if(d.kind==='payreq')detail=[A('amount')?('¥'+A('amount')):'',A('to')||A('note')||body.slice(0,24)].filter(Boolean).join(' · ');
+  else if(d.kind==='alarm'||d.kind==='timer'||d.kind==='alarm_snooze')detail=A('time')||A('at')||A('min')||A('sec')||A('label')||body.slice(0,24);
+  else if(d.kind==='sticker')detail=A('name')||A('id')||body.slice(0,20);
+  else if(d.kind==='bridge_tool')detail=A('name')||A('tool');
+  else if(d.kind==='music')detail=A('title')||A('name')||A('q')||A('act')||body.slice(0,24);
+  else if(d.kind==='weather'||d.kind==='loc')detail=A('city')||A('q');
+  else if(d.kind==='search'||d.kind==='ctx')detail=A('q')||A('query')||body.slice(0,24);
+  else if(d.kind==='gen_video')detail=String(A('prompt')||body||(r&&(r.oprompt||r.prompt))||'').slice(0,40);
+  var st='mob',stTxt='手机端专属';
+  if(r){if(r.running){st='run';stTxt='进行中（在手机上）'}
+    else if(r.seeAsk||r.pendingConfirm){var lb=String(r.label||'');if(/→\s*允许/.test(lb)){st='ok';stTxt='你允许了'}else if(/→/.test(lb)){st='fail';stTxt=/没有回应/.test(lb)?'没有回应':'你拒绝了'}else{st='pend';stTxt=r.ask?('请求：'+String(r.ask).slice(0,22)):'等待确认'}}
+    else if(r.ok===false){st='fail';stTxt=String(r.reason||'未完成').slice(0,36)}
+    else{st='ok';stTxt=(d.kind==='see_step')?'完成':(r.st==='done'||r.ok)?'已完成':'已记录'}}
+  var card=document.createElement('div');card.className='ws-op-card mob-card expandable'+(st==='fail'?' fail':'');card.setAttribute('data-mob',d.kind);
+  card.innerHTML=_IB_MOB_ICON(M[1])+'<span class="ws-op-text">'+esc(title)+(detail?' · <b>'+esc(detail)+'</b>':'')+'</span><span class="ws-op-tag mob-tag '+st+'">'+esc(stTxt)+'</span><svg class="ws-op-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4"/></svg>';
+  var det=document.createElement('div');det.className='ws-op-detail mob-detail';
+  var sec=function(h,t){var w=document.createElement('div');w.className='mob-sec';var hh=document.createElement('div');hh.className='mob-sec-h';hh.textContent=h;var bb=document.createElement('div');bb.className='mob-sec-b';bb.textContent=t;w.appendChild(hh);w.appendChild(bb);det.appendChild(w);return bb};
+  var stepBox=null;if(d.kind==='phone_task'&&mode!=='companion')stepBox=sec('步骤','（点开时读取）');
+  if(d.kind==='see_step'&&r&&r.ask)sec('请求',String(r.ask));
+  if(r&&(r.response||r.reason))sec('结果',String(r.response||r.reason));
+  if(body)sec('正文',body);
+  sec('代码',String(d.raw||('<ws_'+d.kind+(d.attrs?' '+String(d.attrs).replace(/\/\s*$/,'').trim():'')+'/>'))+(r?('\n\n// 手机端回执\n'+JSON.stringify(_ibMobResClean(r),null,2)):'\n\n// 没有随记录带来的回执'));
+  var nt=document.createElement('div');nt.className='mob-note';nt.textContent='手机端（APK）专属操作的记录：电脑端只展示、不执行。';det.appendChild(nt);
+  card.appendChild(det);
+  card.onclick=function(){card.classList.toggle('expanded');if(stepBox&&!stepBox._ld&&card.classList.contains('expanded')){stepBox._ld=1;stepBox.textContent='读取中…';_ibMobSteps(card,stepBox)}};
+  return card}
+function _segmentAiText(text){text=text||'';text=text.replace(/<ws_vdraw\b[^>]*?\/?>(?:\s*<\/ws_vdraw\s*>)?/gi,'');
+  if(!/<ws_(?:gen_video|phone_task|see_|phone|payreq|alarm|timer|sticker|bridge_tool|music|weather|loc|search|ctx)/i.test(text))return _segmentAiTextCore(text);
+  var out=[],last=0,m;_WS_MOB_RE.lastIndex=0;
+  while((m=_WS_MOB_RE.exec(text))!==null){var st=m.index,ao=_WS_MOB_RE.lastIndex,k=m[1].toLowerCase(),at=m[2]||'';
+    if(st>last)out=out.concat(_segmentAiTextCore(text.slice(last,st)));
+    var op={type:'mobile',kind:k,attrs:at,body:'',raw:''};
+    if(/\/\s*$/.test(at)){op.raw=text.slice(st,ao);last=ao}
+    else{var cr=new RegExp('<\\/ws_'+k+'\\s*>','ig');cr.lastIndex=ao;var cm=cr.exec(text);if(cm){op.body=text.slice(ao,cm.index).trim();op.raw=text.slice(st,cr.lastIndex);last=cr.lastIndex}else{op.raw=text.slice(st,ao);last=ao}}
+    _WS_MOB_RE.lastIndex=last;out.push({type:'op',op:op})}
+  if(last<text.length)out=out.concat(_segmentAiTextCore(text.slice(last)));
+  return out}
 function _segmentAiTextCore(text){
   text=text||'';
 
@@ -13768,7 +13835,7 @@ function _segmentAiTextCore(text){
       last=akClose.lastIndex;_WS_OPEN_RE.lastIndex=last;continue;
     }
     if(kind==='mem_write'){/* v76 r2：<ws_mem_write>正文即记忆内容（与手机端 v74-m 同协议）；截断补救与其余成对标签一致 */
-      var mwOp={type:'mem_write',body:'',attrs:attrs||''};/* v20-sync：② 携带可选参数（importance/valence/arousal/tags/domain） */
+      var mwOp={type:'mem_write',body:'',attrs:attrs||''};if(/\/\s*$/.test(attrs)){segs.push({type:'op',op:mwOp});last=afterOpen;_WS_OPEN_RE.lastIndex=last;continue}/* v139：同上 *//* v20-sync：② 携带可选参数（importance/valence/arousal/tags/domain） */
       var mwClose=/<\/ws_mem_write\s*>/ig;mwClose.lastIndex=afterOpen;
       var mwm=mwClose.exec(text);
       if(!mwm){var mwBody=text.slice(afterOpen).trim();if(mwBody)mwOp.body=mwBody;mwOp.truncated=true;segs.push({type:'op',op:mwOp});last=text.length;break}
@@ -13778,6 +13845,7 @@ function _segmentAiTextCore(text){
     }
     if(kind==='blog_write'){
       var bwOp={type:'blog_write',body:'',attrs:attrs||''};
+      if(/\/\s*$/.test(attrs)){segs.push({type:'op',op:bwOp});last=afterOpen;_WS_OPEN_RE.lastIndex=last;continue}
       var bwClose=/<\/ws_blog_write\s*>/ig;bwClose.lastIndex=afterOpen;
       var bwm=bwClose.exec(text);
       if(!bwm){var bwBody=text.slice(afterOpen).trim();if(bwBody)bwOp.body=bwBody;bwOp.truncated=true;segs.push({type:'op',op:bwOp});last=text.length;break}
@@ -13920,13 +13988,6 @@ function _segmentAiTextCore(text){
   pushText(text.slice(last));
   return segs;
 }
-function _segmentAiText(text){
-  text=String(text||'').replace(/<ws_vdraw\b[^>]*?\/?>(?:\s*<\/ws_vdraw\s*>)?/gi,'');
-  if(!/<ws_(?:gen_video|phone_task|see_|phone|payreq|alarm|timer|sticker|bridge_tool|music|weather|loc|search|ctx)/i.test(text))return _segmentAiTextCore(text);
-  var out=[],last=0,m;_WS_MOB_RE.lastIndex=0;
-  while((m=_WS_MOB_RE.exec(text))!==null){var st=m.index,ao=_WS_MOB_RE.lastIndex,k=m[1].toLowerCase(),at=m[2]||'';if(st>last)out=out.concat(_segmentAiTextCore(text.slice(last,st)));var op={type:'mobile',kind:k,attrs:at,body:'',raw:''};if(/\/\s*$/.test(at)){op.raw=text.slice(st,ao);last=ao}else{var cr=new RegExp('<\\/ws_'+k+'\\s*>','ig');cr.lastIndex=ao;var cm=cr.exec(text);if(cm){op.body=text.slice(ao,cm.index).trim();op.raw=text.slice(st,cr.lastIndex);last=cr.lastIndex}else{op.raw=text.slice(st,ao);last=ao}}_WS_MOB_RE.lastIndex=last;out.push({type:'op',op:op})}
-  if(last<text.length)out=out.concat(_segmentAiTextCore(text.slice(last)));return out;
-}
 /* ── ── 历史消息瘦身：发给 API 时把已执行过的文件全文替换为占位，避免 ── */
 function _wsStubHistory(text,wsResults){
   if(!text)return text;
@@ -13959,7 +14020,7 @@ function _panelMdHost(div){
 /* ── 分段渲染：文本、操作卡、下载卡按原始顺序进入气泡（历史与实时共用同一渲染路径） ── */
 function _renderSegments(host,text,wsResults){
   var segs=_segmentAiText(text||'');
-  var ri=0;
+  var ri=0,_mobUsed={};
   var mode=_mdMode();
   segs.forEach(function(s){
     if(s.type==='text'){
@@ -13977,9 +14038,10 @@ function _renderSegments(host,text,wsResults){
     }else{
       var data=Object.assign({},s.op);
       if(data.type==='mobile'){
-        if(Array.isArray(wsResults)){for(var mi=0;mi<wsResults.length;mi++){var mr=wsResults[mi];if(mr&&!mr._ibMobUsed&&mr.type===data.kind){data.res=mr;mr._ibMobUsed=true;break}}}
+        if(Array.isArray(wsResults)){while(ri<wsResults.length&&_mobUsed[ri])ri++;if(ri<wsResults.length&&wsResults[ri]&&wsResults[ri].type===data.kind){data.res=wsResults[ri];_mobUsed[ri++]=1}else{for(var mi=0;mi<wsResults.length;mi++){var mr=wsResults[mi];if(mr&&!_mobUsed[mi]&&mr.type===data.kind){data.res=mr;_mobUsed[mi]=1;break}}}}
         var mobCard=_ibMobCardD(data);if(mobCard)host.appendChild(mobCard);return;
       }
+      while(wsResults&&ri<wsResults.length&&_mobUsed[ri])ri++;
       if(wsResults&&ri<wsResults.length){
         var r=wsResults[ri++];
         if(r&&r.type===data.type){data.ok=r.ok;if(r.reason)data.reason=r.reason;if(r.size!==undefined)data.size=r.size;if(r.projId)data.projId=r.projId;if(r.isDefault)data.isDefault=true;if(r.renamedFrom){data.renamedFrom=r.renamedFrom;data.path=r.path}
@@ -13990,7 +14052,7 @@ function _renderSegments(host,text,wsResults){
           if(data.type==='beyond_view'){['pendingConfirm','done','denied','author','cfgId','n','id','fed','response'].forEach(function(k){if(r[k]!==undefined)data[k]=r[k]})}
           if(data.type==='beyond_inbox'){['fed','response','n'].forEach(function(k){if(r[k]!==undefined)data[k]=r[k]})}
           if(data.type==='delete'){['pendingConfirm','done','denied','fed','author','projId','path'].forEach(function(k){if(r[k]!==undefined)data[k]=r[k]})}/* v134 */
-          if(data.type==='blog_write'){['title','detail','postId','category'].forEach(function(k){if(r[k]!==undefined)data[k]=r[k]})}if(data.type==='blog_edit'){['title','detail','postId','mode','response','fed'].forEach(function(k){if(r[k]!==undefined)data[k]=r[k]})}/* v136 */
+          if(data.type==='blog_write'){['title','detail','postId','category','truncated'].forEach(function(k){if(r[k]!==undefined)data[k]=r[k]})}if(data.type==='blog_edit'){['title','detail','postId','mode','response','fed'].forEach(function(k){if(r[k]!==undefined)data[k]=r[k]})}/* v136 */
         }
       }
       var cardEl=_buildWsOpCard(data);
@@ -14157,7 +14219,7 @@ function _vmRecogErrMsg(code){
 const VM_MAX_SEC=60;/* 最长录音 60 秒，达到后自动停止并发送 */
 
 function _vmSupported(){return !!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder)}
-function _voiceApiLine(v,withTone){var d=Math.max(1,Math.round((v&&v.duration)||1));var t=((v&&v.transcript)||'').trim();var tnN=(withTone&&v&&v.tone)?_vmToneNatural(v.tone):'';var tn=tnN?('｜声学语气参考: '+tnN):'';return '[语音消息 '+d+'秒'+tn+'] '+(t||'（语音内容未能自动识别）')}
+function _voiceApiLine(v,withTone){var d=Math.max(1,Math.round((v&&v.duration)||1));var t=((v&&v.transcript)||'').trim();var tnN=(withTone&&v&&v.tone)?_vmToneNatural(v.tone):'';var tn=tnN?('｜声学语气参考: '+tnN):'';return '“'+String((typeof _cachedUserName!=='undefined'&&_cachedUserName)||'用户')+'”发了一条语音条：[语音消息 '+d+'秒'+tn+'] '+(t||'（语音内容未能自动识别）')}/* v141：与手机端同格式 */
 function _vmToneNatural(tone){
   try{
     var str=String(tone||'').trim();if(!str)return '';
@@ -18103,7 +18165,7 @@ async function _ibBlogWriteExec(cfg,op,n){
   var nm=String((cfg&&(cfg.name||cfg.nickname))||'TA');var title=String(_wsAttr(op.attrs||'','title')||'').replace(/\s+/g,' ').trim().slice(0,40)||body.replace(/^#+\s*/,'').split('\n')[0].slice(0,24);
   var post={id:'post_'+Date.now()+'_ai',title:title,subtitle:'',category:nm,format:'md',locked:false,content:body,created:Date.now(),updated:Date.now(),aiWritten:true,author:cfg.id,authorName:nm};
   try{await dbPut('posts',post)}catch(e){return{type:'blog_write',ok:false,reason:'日志保存失败，没有收下'}}
-  return{type:'blog_write',ok:true,title:title,postId:post.id,category:nm,reason:'日志《'+title+'》已收下，放在 Blog 的「'+nm+'」分类里，署你的名。',detail:'《'+title+'》 → 分类「'+nm+'」'};/* v88：带上日志 id，卡片点开直达阅读页 */
+  return{type:'blog_write',ok:true,title:title,postId:post.id,category:nm,truncated:!!(op&&op.truncated),reason:'日志《'+title+'》已收下，放在 Blog 的「'+nm+'」分类里，署你的名。'+((op&&op.truncated)?'（输出被截断，正文可能不完整——可以用 ws_blog_edit 读回后补完）':''),detail:'《'+title+'》 → 分类「'+nm+'」'};/* v139：截断的照收，但回执与卡片都说清楚 *//* v88：带上日志 id，卡片点开直达阅读页 */
 }
 function _ibBlogNormTD(t){return String(t||'').replace(/[《》「」"'“”]/g,'').replace(/\s+/g,' ').trim().toLowerCase()}
 async function _ibBlogEditExec(cfg,op,n,who){
@@ -21096,6 +21158,7 @@ function _mcpBrandCardD(b,d){
 
 
 function _buildWsOpCard(d){
+  if(d.type==='mobile')return _ibMobCardD(d);
   if(d.type==='ask')return _askCardD(d);
 
   if(d.type==='project'&&d.ok!==false&&!d.malformed&&(d.isDefault||d.projId===WS_DEFAULT_PROJ_ID||_wsIsDefaultName(d.name)))return null;
@@ -21136,7 +21199,7 @@ function _buildWsOpCard(d){
   else if(d.type==='repost')label=ok?'已转发动态':'转发动态未执行';
   else if(d.type==='beyond_inbox')label=ok?'已查询互动收件箱 · 结果将随你的下一条消息回传':'收件箱查询未执行';/* fix-r2；v92：注明送达时机（不再自动代发） */
   else if(d.type==='beyond_view')label=d.pendingConfirm?(d.denied?'已拒绝查看动态':(d.done?'已允许查看动态':'查看动态')):(ok?('已查看动态'+(d.fed?' · 结果将随你的下一条消息回传':'')):'查看动态未执行');/* v92：自动同意路径注明送达时机 */
-  else if(d.type==='blog_write'){var _bwT=d.title||_wsAttr(d.attrs||'','title')||'';label=ok?('已写入 Blog'+(_bwT?' ·《'+_bwT+'》':'')):'Blog 写入未执行'}else if(d.type==='blog_edit'){var _beT=d.title||'';label=ok?((d.mode==='read'?'已读取日志':'已修改 Blog')+(_beT?' ·《'+_beT+'》':'')):(d.mode==='read'?'日志读取未执行':'Blog 修改未执行')}/* v136；v137：读回失败单独一句 *//* v88：标题缺省从标签属性取 */
+  else if(d.type==='blog_write'){var _bwT=d.title||_wsAttr(d.attrs||'','title')||'';label=ok?('已写入 Blog'+(d.truncated?'（可能不完整）':'')+(_bwT?' ·《'+_bwT+'》':'')):'Blog 写入未执行'}else if(d.type==='blog_edit'){var _beT=d.title||'';label=ok?((d.mode==='read'?'已读取日志':'已修改 Blog')+(_beT?' ·《'+_beT+'》':'')):(d.mode==='read'?'日志读取未执行':'Blog 修改未执行')}/* v136；v137：读回失败单独一句 *//* v88：标题缺省从标签属性取 */
   else label=ok?'已读取文件':'读取失败';
   var _mwFlat=(d.type==='mem_write'||d.type==='blog_write'||d.type==='blog_edit'||d.type==='post'||d.type==='comment'||d.type==='sig'||d.type==='repost')?String(d.body||'').replace(/\s+/g,' ').replace(/\u200b/g,''):'';
   var detail=d.type==='help'?'工作区完整教程':d.type==='project'?(d.name||''):d.type==='run'?(d.entry||'内联代码'):d.type==='tool'?(d.name||''):d.type==='blog_write'?(d.detail||((d.title||_wsAttr(d.attrs||'','title'))?('《'+(d.title||_wsAttr(d.attrs||'','title'))+'》'+(d.category?' → 分类「'+d.category+'」':'')):'')):d.type==='blog_edit'?(d.detail||(d.title?('《'+d.title+'》'):'')):d.type==='mem_write'?(d.title||_mwFlat.slice(0,18)+(_mwFlat.length>18?'…':'')):(d.type==='post'||d.type==='comment'||d.type==='sig')?(_mwFlat.slice(0,18)+(_mwFlat.length>18?'…':'')||'（图片）'):d.type==='repost'?('#'+String(d.pid||'')):d.type==='beyond_inbox'?'近 72 小时':d.type==='beyond_view'?(d.id?('#'+String(d.id).replace(/^#/,'')):('最近 '+(d.n||10)+' 条')):d.type==='gen_image'?String(d.prompt||'').slice(0,40)+(String(d.prompt||'').length>40?'…':''):(d.path||'');/* v76：新指令卡副标题 */
@@ -26032,6 +26095,7 @@ async function clearChatSeal(friendId,threadId){
 }
 /* 过滤封档线之前的消息（供 API 读取链路使用） */
 function filterSealed(msgs,sealTs){
+  msgs=(msgs||[]).filter(function(m){return !(m&&m.seeStep)});
   if(!sealTs)return msgs;
   return msgs.filter(function(m){return (m.timestamp||m.created||0)>sealTs});
 }
@@ -29914,11 +29978,10 @@ async function cloudFetchTTS(s,cs,signal){
     res=await fetch(u,{method:'POST',headers:{'xi-api-key':cs.key,'Content-Type':'application/json'},body:JSON.stringify({text:s,model_id:(cs.model||'eleven_multilingual_v2')}),signal:signal});
   }else if(prov==='mm'){
     if(!cs.key)throw new Error('未配置 MiniMax Key');
-    if(!cs.gid)throw new Error('MiniMax 需填 GroupId');
     let base=String(cs.ep||'').trim().replace(/\/+$/,'')||'https://api.minimax.chat';
     if(!/\/v\d+$/i.test(base))base+='/v1';
     const rr0=Math.max(0.5,Math.min(2,parseFloat(cs.rate)||1));
-    res=await fetch(base+'/t2a_v2?GroupId='+encodeURIComponent(cs.gid),{method:'POST',headers:{'Authorization':'Bearer '+cs.key,'Content-Type':'application/json'},body:JSON.stringify({model:(cs.model||'speech-02-turbo'),text:s,stream:false,voice_setting:{voice_id:(cs.voice||'female-shaonv'),speed:rr0},audio_setting:{format:'mp3',sample_rate:32000}}),signal:signal});
+    res=await fetch(base+'/t2a_v2'+(cs.gid?('?GroupId='+encodeURIComponent(cs.gid)):''),{method:'POST',headers:{'Authorization':'Bearer '+cs.key,'Content-Type':'application/json'},body:JSON.stringify({model:(cs.model||'speech-02-turbo'),text:s,stream:false,voice_setting:{voice_id:(cs.voice||'female-shaonv'),speed:rr0},audio_setting:{format:'mp3',sample_rate:32000}}),signal:signal});
   }else if(prov==='az'){
     if(!cs.key)throw new Error('未配置 Azure 密钥');
     let base=String(cs.ep||'').trim().replace(/\/+$/,'');
@@ -30267,7 +30330,7 @@ function voiceEd(host,get,set,opt){opt=opt||{};var o=get()||{};
  var sP=selEl(PROV_OPTS,/^(el|mm|az|ali|doubao)$/.test(o.provider)?o.provider:'oai');gC.appendChild(fgEl('服务商',sP));
  var iE=inpEl('留空使用官方地址；OpenAI 兼容与 Azure 必填',o.ep);gC.appendChild(fgEl('Endpoint',iE));
  var iK=inpEl('新版控制台 API Key',o.key||'63ea197a-e700-4f82-b724-15614b750498','password');gC.appendChild(fgEl('API Key',iK));
- var iG=inpEl('账号信息页的 GroupId',o.gid),gG=fgEl('GroupId（MiniMax 必填）',iG);gC.appendChild(gG);
+ var iG=inpEl('新版接口可留空；老账号填账号信息页的 GroupId',o.gid),gG=fgEl('GroupId（MiniMax 选填）',iG);gC.appendChild(gG);
  var iM=inpEl('留空使用默认模型',o.model);gC.appendChild(fgEl('模型',iM));
  var iV=inpEl('CosyVoice2 填 模型:音色；ElevenLabs 填 voice_id',o.voice||'S_D7jejZ8f2');gC.appendChild(fgEl('音色（voice）',iV));
  var row=null,sL=null,sR=null,sV=null;
@@ -30753,6 +30816,7 @@ async function endCall(reason){if(!isOpen)return;isOpen=false;speakGen++;
  toast('通话已结束'+(myT>0?'（文字稿已写入聊天记录）':''))}
 window.IBCALLW={openVideo:function(fid){try{buildWin();W.classList.add('show');if(W.classList.contains('mini'))_miniOff();clearRing();document.querySelectorAll('.chat-attach-popup.show').forEach(function(p){p.classList.remove('show')});var c=_cList().find(function(x){return x.id===fid});if(!c){toast('这位联系人不在通话列表里');return}startCall(c,{video:true})}catch(e){}},/* v63 ①：视频入口 */open:function(fid){buildWin();W.classList.add('show');if(W.classList.contains('mini'))_miniOff();clearRing();try{document.querySelectorAll('.chat-attach-popup.show').forEach(function(p){p.classList.remove('show')})}catch(e){}if(!isOpen&&!dialing){if(fid&&_cList().some(function(x){return x.id===fid}))focusContact(fid);else showFace((_F==='det'&&_detC)?'det':(_F==='st'?'st':'ct'),_detC)}},active:function(){return isOpen||dialing},fid:function(){return cfg?cfg.id:''},typeIn:typeIn,sysExtra:sysExtra,onDelta:onDelta,onAiMsg:onAiMsg,onTurnEnd:onTurnEnd,startCall:startCall,endCall:endCall,saveCallMemory:saveCallMemory,inviteCard:inviteCard,endCard:endCard,_face:function(f,c){buildWin();W.classList.add('show');showFace(f,c)}};
 decoInit();
+try{window._callEffMerge=_callEffMerge;window.loadCALL=loadCALL;window.cloudFetchTTS=cloudFetchTTS;window._ibcCleanSent=_ibcCleanSent;window._IBGIFT=_IBGIFT;Object.defineProperty(window,'_callS',{get:function(){return _callS},configurable:true})}catch(e){}
 })();
 </script>
 <script id="ib-apps-base">
@@ -31880,7 +31944,7 @@ function clip(t,n){t=String(t||'');return t.length>n?t.slice(0,n)+'\n\n…（导
 function cfgs(){try{return (typeof apiConfigs!=='undefined'&&Array.isArray(apiConfigs))?apiConfigs.filter(function(c){return c&&c.id}):[]}catch(e){return []}}
 function nameOf(c){return (c&&(c.nickname||c.model))||'TA'}
 function dbOk(){try{return typeof db!=='undefined'&&!!db}catch(e){return false}}
-function dbDeleteMany(st,keys){return new Promise(function(res,rej){if(!keys||!keys.length){res();return}var t=db.transaction(st,'readwrite'),o=t.objectStore(st);keys.forEach(function(k){try{o.delete(k)}catch(e){}});t.oncomplete=function(){try{_ibFsDirty=true}catch(e){}res()};t.onerror=function(){rej(t.error)}})}
+function dbDeleteMany(st,keys){return new Promise(function(res,rej){if(!keys||!keys.length){res();return}var t=db.transaction(st,'readwrite'),o=t.objectStore(st);keys.forEach(function(k){o.delete(k)});t.oncomplete=function(){try{_ibFsDirty=true;if(typeof IBSyncClient!=='undefined')keys.forEach(function(k){IBSyncClient.recordChange(st,String(k),'delete',null)})}catch(e){}res()};t.onerror=function(){rej(t.error)};t.onabort=function(){rej(t.error||new Error('删除事务已中止'))}})}
 async function _msgEdInvalM(cfg,thr,ts){try{var key='sum_'+(thr?thr.id:cfg.id);var x=await dbGet('chatSummaries',key);if(x&&Number(x.coveredUpTo||0)>=ts)await dbDelete('chatSummaries',key)}catch(e){}}
 function _friendsBump(){try{if(typeof loadFriendsList==='function')loadFriendsList()}catch(e){}}
 /* ── 读文件：zip 只解目录与目标条目 ── */
@@ -32015,8 +32079,8 @@ async function run(o){if(!dbOk())throw new Error('数据库还没准备好，稍
   if(!recs.length)return {n:0,skip:skip,th:0,b:''};
   recs.forEach(function(r,i){r._o=i});recs.sort(function(x,y){return (x.timestamp-y.timestamp)||(x._o-y._o)});
   var prev=0;recs.forEach(function(r){var t=Math.max(Math.round(r.timestamp)||0,prev+1);r.timestamp=t;r.id='msg_'+t+'_ci'+b;prev=t;delete r._o});/* 主键数字＝时间戳且批内严格递增；批次后缀让不同批次、不同好友之间永不撞键 */
-  if(ths.length)await dbPutAll('chatThreads',ths);
-  for(var i=0;i<recs.length;i+=400){await dbPutAll('chatMessages',recs.slice(i,i+400));prog(Math.min(1,(i+400)/recs.length),'已写入 '+Math.min(recs.length,i+400)+' / '+recs.length);await new Promise(function(r){setTimeout(r,0)})}
+  if(ths.length){await dbPutAll('chatThreads',ths);if(typeof IBSyncClient!=='undefined'&&IBSyncClient.registerRepublish)IBSyncClient.registerRepublish(ths.map(function(r){return {store:'chatThreads',record:r}}))}
+  for(var i=0;i<recs.length;i+=400){var chunk=recs.slice(i,i+400);await dbPutAll('chatMessages',chunk);if(typeof IBSyncClient!=='undefined'&&IBSyncClient.registerRepublish)IBSyncClient.registerRepublish(chunk.map(function(r){return {store:'chatMessages',record:r}}));prog(Math.min(1,(i+400)/recs.length),'已写入 '+Math.min(recs.length,i+400)+' / '+recs.length);await new Promise(function(r){setTimeout(r,0)})}
   var mn=recs[0].timestamp,mx=recs[recs.length-1].timestamp;if(o.mode==='main'){try{await _msgEdInvalM(cfg,null,mn)}catch(e){}}/* 只有并入主线才可能压到主线摘要的覆盖线 */
   var H=hist();H.unshift({b:b,fid:o.fid,fn:nm,n:recs.length,th:ths.length,src:o.src,file:String(o.file||'').slice(0,60),t:Date.now(),min:mn,max:mx,mode:o.mode});saveHist(H);
   try{_friendsBump()}catch(e){}refreshConv(o.fid);return {n:recs.length,skip:skip,th:ths.length,b:b,min:mn,max:mx,tid:ths.length?ths[0].id:''}}
