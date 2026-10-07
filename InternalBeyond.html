@@ -10154,7 +10154,7 @@ var IO_STORE_CN={posts:'日志',categories:'分类',about:'个人资料',apiSett
   blogComments:'日志评论',memories:'记忆',chatThreads:'话题频道',chatSummaries:'对话摘要',
   uploadedFiles:'上传文件',blogAnnotations:'日志批注',projects:'ICode 项目',
   projectFiles:'ICode 文件',autoMemory:'Auto Memory',calEvents:'日历事项',
-  calNotes:'日历留笺',calLedger:'日历台账'};
+  calNotes:'日历留笺',calLedger:'日历台账',__media:'本机媒体库（视频）'};
 function _ioEl(id){return document.getElementById(id)}
 function _ioFmtSize(n){n=+n||0;if(n>=1048576)return (n/1048576).toFixed(1)+' MB';if(n>=1024)return (n/1024).toFixed(0)+' KB';return n+' B'}
 function _ioYield(){return new Promise(function(r){setTimeout(r,0)})}
@@ -10179,6 +10179,7 @@ function ioRenderSetup(){
     bd.innerHTML='<div class="io-note">把站内全部数据导出为一个 JSON 文件，包含日志、聊天记录、记忆、信件、API 配置、日历与 ICode 项目文件。<br><b>API 密钥以明文包含在内</b>，请妥善保管该文件。</div>'
       +'<div class="io-prog-hint">数据量大时导出会占用较长时间。这个界面在处理期间会停止响应，属于正常现象，请不要关闭页面。</div>';
     ft.innerHTML='<button class="btn" onclick="ioClose()">取消</button><button class="btn btn-primary" onclick="ioRun()">开始导出</button>';
+    try{if(window._ibVidD)window._ibVidD.exportRow(bd)}catch(e){}
   }else{
     bd.innerHTML='<div class="io-note">选择此前导出的 JSON 存档。导入为<b>合并写入</b>：同编号的记录会被存档中的版本覆盖，站内已有而存档中没有的记录保持不变。</div>'
       +'<div class="io-drop" id="io-drop"><div class="io-dt">点击选择文件，或把 JSON 拖到这里</div><div class="io-ds">仅接受本站导出的 .json 存档</div></div>'
@@ -10241,6 +10242,7 @@ async function ioRun(){
   }finally{_ioBusy=false}
 }
 async function _ioDoExport(){
+  var _wantMedia9=false;try{var _cb9=document.getElementById('io-media');_wantMedia9=!!(_cb9&&_cb9.checked&&!_cb9.disabled)}catch(e){}
   if(!await ibConfirmX('备份将包含全部 API 密钥（明文）。分享备份＝分享密钥，请只在自己的设备间流转。音乐库（歌曲文件与分析）体积大，不随备份导出 / 导入。继续导出？'))return;/* v83 r8：审查 P1-4 */
   _ioProgUI('正在读取站内数据…');
   await _ioYield();
@@ -10256,6 +10258,7 @@ async function _ioDoExport(){
     if(name==='groups'){try{arr=await loadGroups()}catch(e){}}
     data[name]=arr;counts[name]=arr.length;
   }
+  if(_wantMedia9&&window._ibVidD){_ioStep('正在读取：本机媒体库（视频）',76);await _ioYield();try{var _md9=await window._ibVidD.exportMedia();if(_md9.length){data.media=_md9;counts.__media=_md9.length}}catch(e){}}
   data.exportDate=new Date().toISOString();data.version=4;
   _ioStep('正在生成存档文件（这一步会停顿）…',82,'正在把数据序列化为 JSON。这一步无法拆分，界面会短暂无响应。');
   await _ioYield();
@@ -10293,6 +10296,7 @@ async function _ioDoImport(){
     try{await dbPutAll(name,arr);counts[name]=arr.length;done+=arr.length;if(typeof IBSyncClient!=='undefined'&&IBSyncClient.registerRepublish&&['chatMessages','chatThreads','chatSummaries','memories','autoMemory','calEvents','calNotes','calLedger','posts','categories','letters'].indexOf(name)!==-1)arr.forEach(function(record){importedRows.push({store:name,record:record})})}
     catch(e){counts[name]=e.written||0;done+=counts[name];skipped.push((IO_STORE_CN[name]||name)+'（'+(e.message||'写入失败')+'）')}
   }
+  if(Array.isArray(data.media)&&data.media.length&&window._ibVidD){_ioStep('正在写入：本机媒体库（视频）',92);await _ioYield();try{counts.__media=await window._ibVidD.importMedia(data.media)}catch(e){skipped.push('本机媒体库（'+(e.message||'写入失败')+'）')}}
   _ioStep('正在刷新站内状态…',94);
   await _ioYield();
   try{await migrateLockedPosts()}catch(e){}
@@ -10306,7 +10310,7 @@ async function _ioDoImport(){
   try{if(window.IBCAL&&IBCAL.invalidate)await IBCAL.invalidate()}catch(e){}
   try{if(importedRows.length&&typeof IBSyncClient!=='undefined'&&IBSyncClient.registerRepublish)IBSyncClient.registerRepublish(importedRows)}catch(syncErr){skipped.push('云同步登记（'+(syncErr.message||syncErr)+'）')}
   _ioStep('完成',100);
-  var unknown=Object.keys(data).filter(function(k){return Array.isArray(data[k])&&list.indexOf(k)<0});
+  var unknown=Object.keys(data).filter(function(k){return Array.isArray(data[k])&&list.indexOf(k)<0&&k!=='media'});
   var extra='';
   if(skipped.length)extra+='以下类别未完整写入（已计入此前成功的批次）：'+esc(skipped.join('、'))+'。<br>';
   if(unknown.length)extra+='存档中有本版本不认识的类别，已忽略：'+esc(unknown.join('、'))+'。<br>';
@@ -13707,10 +13711,21 @@ function _mkLiveMdCleaner(){
   return{push:push,finish:finish};
 }
 var _WS_OPEN_RE=/<ws_(help|project|read|delete|create|edit|run|tool|gen_image|make_docx|make_pdf|make_xlsx|ask|mem_write|blog_write|blog_edit|post|comment|repost|beyond_view|beyond_inbox|sig)\b([^>]*)>|```file:([^\n]+)\n/gi;
-function _segmentAiText(text){
+var _WS_MOB_RE=/<ws_(gen_video|phone_task|see_step|see_lock|see_unlock|see_usage|phone|payreq|alarm_list|alarm_snooze|alarm_off|alarm|timer|sticker|bridge_tool|music|weather|loc|search|ctx)\b([^>]*)>/gi;
+var _IB_MOB_META={gen_video:['生成视频','video'],phone_task:['控制手机','phone'],see_step:['控制手机 · 步骤','step'],see_lock:['锁应用','lock'],see_unlock:['解除锁应用','lock'],see_usage:['查岗 · 看手机','eye'],phone:['查看手机状态','eye'],payreq:['付款请求','pay'],alarm:['手机闹钟','alarm'],alarm_list:['查看手机闹钟','alarm'],alarm_snooze:['闹钟稍后提醒','alarm'],alarm_off:['关闭手机闹钟','alarm'],timer:['计时器','alarm'],sticker:['表情包','smile'],bridge_tool:['本地桥工具','tool'],music:['播放器','music'],weather:['天气','sun'],loc:['定位','pin'],search:['检索工作区','search'],ctx:['读取上下文','search']};
+function _ibMobResClean(r){var o={};Object.keys(r||{}).forEach(function(k){var v=r[k];if(typeof v==='string'){if(/^data:/.test(v))v='[图片 '+Math.round(v.length/1024)+' KB]';else if(v.length>600)v=v.slice(0,600)+'…'}else if(Array.isArray(v)&&v.length>12)v=v.slice(0,12).concat(['…共 '+v.length+' 项']);o[k]=v});return o}
+function _ibMobCardD(d){
+  if(d.kind==='gen_video'&&window._ibVidD){try{var _vc9=window._ibVidD.card(d);if(_vc9)return _vc9}catch(e){}}
+  var M=_IB_MOB_META[d.kind]||[d.kind,'phone'],r=d.res||null,A=function(k){return _wsAttr(d.attrs||'',k)||''},body=String(d.body||''),detail='';
+  if(d.kind==='phone_task')detail=A('goal')||A('apps');else if(d.kind==='see_step')detail=(r&&r.label)||A('n');else if(d.kind==='payreq')detail=[A('amount')?('¥'+A('amount')):'',A('to')||A('note')||body.slice(0,24)].filter(Boolean).join(' · ');else detail=A('time')||A('at')||A('label')||A('q')||body.slice(0,24);
+  var st='手机端专属',cls='mob';if(r){if(r.running){st='进行中（在手机上）';cls='run'}else if(r.pendingConfirm){st='等待确认';cls='pend'}else if(r.ok===false){st=String(r.reason||'未完成').slice(0,36);cls='fail'}else{st=d.kind==='see_step'?'完成':'已完成';cls='ok'}}
+  var card=document.createElement('div');card.className='ws-op-card mob-card expandable '+cls;card.innerHTML='<span class="ws-op-text">'+esc(M[0])+(detail?' · <b>'+esc(detail)+'</b>':'')+'</span><span class="ws-op-tag mob-tag '+cls+'">'+esc(st)+'</span><svg class="ws-op-chevron" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg>';
+  var det=document.createElement('div');det.className='ws-op-detail mob-detail';det.textContent=(d.body||'')+'\n\n手机端回执：'+(r?JSON.stringify(_ibMobResClean(r),null,2):'未随记录导入');card.appendChild(det);card.onclick=function(){card.classList.toggle('expanded')};return card;
+}
+function _segmentAiTextCore(text){
   text=text||'';
 
-  text=text.replace(/<ws_(?:vgift|vsnap)\b[^>]*?\/?>(?:\s*<\/ws_(?:vgift|vsnap)\s*>)?/gi,'');
+  text=text.replace(/<ws_(?:vgift|vsnap|vdraw)\b[^>]*?\/?>(?:\s*<\/ws_(?:vgift|vsnap|vdraw)\s*>)?/gi,'');
   text=text.replace(/<ws_(music|weather|loc|search|ctx)\b[^>]*>(?:[\s\S]*?<\/ws_\1\s*>)?/gi,function(_m,k){var n={music:'播放器',weather:'天气',loc:'定位',search:'检索工作区',ctx:'读取上下文'}[String(k).toLowerCase()]||k;return '［手机端操作 · '+n+'］'});
   var segs=[],last=0,m;
   var pushText=function(t){t=_mdSoften(t).replace(/\n{3,}/g,'\n\n').trim();if(t)segs.push({type:'text',text:t})};
@@ -13905,6 +13920,13 @@ function _segmentAiText(text){
   pushText(text.slice(last));
   return segs;
 }
+function _segmentAiText(text){
+  text=String(text||'').replace(/<ws_vdraw\b[^>]*?\/?>(?:\s*<\/ws_vdraw\s*>)?/gi,'');
+  if(!/<ws_(?:gen_video|phone_task|see_|phone|payreq|alarm|timer|sticker|bridge_tool|music|weather|loc|search|ctx)/i.test(text))return _segmentAiTextCore(text);
+  var out=[],last=0,m;_WS_MOB_RE.lastIndex=0;
+  while((m=_WS_MOB_RE.exec(text))!==null){var st=m.index,ao=_WS_MOB_RE.lastIndex,k=m[1].toLowerCase(),at=m[2]||'';if(st>last)out=out.concat(_segmentAiTextCore(text.slice(last,st)));var op={type:'mobile',kind:k,attrs:at,body:'',raw:''};if(/\/\s*$/.test(at)){op.raw=text.slice(st,ao);last=ao}else{var cr=new RegExp('<\\/ws_'+k+'\\s*>','ig');cr.lastIndex=ao;var cm=cr.exec(text);if(cm){op.body=text.slice(ao,cm.index).trim();op.raw=text.slice(st,cr.lastIndex);last=cr.lastIndex}else{op.raw=text.slice(st,ao);last=ao}}_WS_MOB_RE.lastIndex=last;out.push({type:'op',op:op})}
+  if(last<text.length)out=out.concat(_segmentAiTextCore(text.slice(last)));return out;
+}
 /* ── ── 历史消息瘦身：发给 API 时把已执行过的文件全文替换为占位，避免 ── */
 function _wsStubHistory(text,wsResults){
   if(!text)return text;
@@ -13954,6 +13976,10 @@ function _renderSegments(host,text,wsResults){
       host.appendChild(fc);
     }else{
       var data=Object.assign({},s.op);
+      if(data.type==='mobile'){
+        if(Array.isArray(wsResults)){for(var mi=0;mi<wsResults.length;mi++){var mr=wsResults[mi];if(mr&&!mr._ibMobUsed&&mr.type===data.kind){data.res=mr;mr._ibMobUsed=true;break}}}
+        var mobCard=_ibMobCardD(data);if(mobCard)host.appendChild(mobCard);return;
+      }
       if(wsResults&&ri<wsResults.length){
         var r=wsResults[ri++];
         if(r&&r.type===data.type){data.ok=r.ok;if(r.reason)data.reason=r.reason;if(r.size!==undefined)data.size=r.size;if(r.projId)data.projId=r.projId;if(r.isDefault)data.isDefault=true;if(r.renamedFrom){data.renamedFrom=r.renamedFrom;data.path=r.path}
@@ -17095,6 +17121,7 @@ async function resetAllData(){
 
   for(const s of IB_STORES){try{await dbClear(s)}catch(e){}}
   try{if(typeof ibExtReset==='function')ibExtReset()}catch(e){}/* 扩展数据（MCP 配置/向量库/白名单等）一并清理 */
+  try{if(window._ibVidD)await window._ibVidD.clearAll(true)}catch(e){}
   try{Object.keys(localStorage).forEach(function(k){if(k.indexOf('ib_')===0&&k!=='ib_resetAt')localStorage.removeItem(k)})}catch(e){}/* 本机设置键（含历史遗留的 ib_mirror_* 镜像残留） */
   try{_tkCacheDoc=null}catch(e){}/* Token 仪表盘内存缓存：不清会在下次记账时把旧明细写回库 */
   apiConfigs=[];activeFriendId=null;activeThreadId=null;lockedDiaryUnlocked=false;diaryMode=false;activeCat='all';
