@@ -31752,5 +31752,387 @@ try{var _b0=IBVB.bar;IBVB.bar=function(){var w=_b0.apply(this,arguments);try{var
 })();
 </script>
 <script src="DLC/IB-Cinema.js"></script>
+<script id="ib-video-desk">
+(function(){
+'use strict';
+var D=document,W=window;
+function $(id){return D.getElementById(id)}
+function escH(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function tst(t){try{toast(t)}catch(e){}}
+/* ── 本机媒体库：独立库 IB_Media（仓 media / jobs，与手机端同结构；电脑端只用 media） ── */
+var MDB=null;
+function mdb(){if(MDB)return Promise.resolve(MDB);return new Promise(function(res,rej){var q=indexedDB.open('IB_Media',1);q.onupgradeneeded=function(){var d=q.result;if(!d.objectStoreNames.contains('media'))d.createObjectStore('media',{keyPath:'id'});if(!d.objectStoreNames.contains('jobs'))d.createObjectStore('jobs',{keyPath:'id'})};q.onsuccess=function(){MDB=q.result;try{MDB.onversionchange=function(){try{MDB.close()}catch(e){}MDB=null}}catch(e){}res(MDB)};q.onerror=function(){rej(q.error||new Error('IB_Media 打不开'))};q.onblocked=function(){rej(new Error('IB_Media 被占用'))}})}
+function mtx(store,mode,fn){return mdb().then(function(d){return new Promise(function(res,rej){var t=d.transaction(store,mode||'readonly'),st=t.objectStore(store);var r=fn(st);if(r&&typeof r==='object'&&'onsuccess' in r){r.onsuccess=function(){res(r.result)};r.onerror=function(){rej(r.error)}}else{t.oncomplete=function(){res(r)};t.onerror=function(){rej(t.error)}}})})}
+var M={put:function(rec){return mtx('media','readwrite',function(st){return st.put(rec)})},get:function(id){return mtx('media','readonly',function(st){return st.get(id)})},del:function(id){return mtx('media','readwrite',function(st){return st.delete(id)})},all:function(){return mtx('media','readonly',function(st){return st.getAll()})},clear:function(){return mtx('media','readwrite',function(st){return st.clear()})}};
+function mb(n){return (n/1048576).toFixed(n<1048576*10?2:1)}
+function blobDataUrl(b){return new Promise(function(res,rej){var fr=new FileReader();fr.onload=function(){res(String(fr.result||''))};fr.onerror=function(){rej(fr.error)};fr.readAsDataURL(b)})}
+function dataUrlBlob(u){u=String(u||'');var m=/^data:([^;,]*)(;base64)?,(.*)$/s.exec(u);if(!m)return null;var mime=m[1]||'application/octet-stream';if(!m[2])return new Blob([decodeURIComponent(m[3])],{type:mime});var bin=atob(m[3]),n=bin.length,a=new Uint8Array(n);for(var i=0;i<n;i++)a[i]=bin.charCodeAt(i);return new Blob([a],{type:mime})}
+async function usage(){var rows=[];try{rows=await M.all()}catch(e){}var o={n:0,size:0};rows.forEach(function(r){if(r&&r.kind!=='theme'){o.n++;o.size+=r.size||(r.blob&&r.blob.size)||0}});return o}
+function refreshCards(){try{D.querySelectorAll('.vg-photo[data-vid]').forEach(function(el){M.get(el.getAttribute('data-vid')).then(function(r){el.classList.toggle('vg-gone',!(r&&r.blob))}).catch(function(){})})}catch(e){}}
+async function importMedia(list){var n=0;list=Array.isArray(list)?list:[];for(var i=0;i<list.length;i++){var o=list[i];if(!(o&&o.id&&o.data))continue;if(o.kind&&o.kind!=='video')continue;/* 手机端主题方案的背景图（kind:theme）电脑端用不上，不收 */var b=null;try{b=dataUrlBlob(o.data)}catch(e){}if(!b)continue;var rec={};Object.keys(o).forEach(function(k){if(k!=='data')rec[k]=o[k]});rec.blob=b;rec.mime=rec.mime||b.type;rec.size=b.size;rec.kind='video';try{await M.put(rec);n++}catch(e){}list[i]=null}refreshCards();return n}
+async function exportMedia(){var rows=[];try{rows=await M.all()}catch(e){}var out=[];for(var i=0;i<rows.length;i++){var r=rows[i];if(!(r&&r.blob)||r.kind==='theme')continue;var o={};Object.keys(r).forEach(function(k){if(k!=='blob')o[k]=r[k]});try{o.data=await blobDataUrl(r.blob)}catch(e){continue}out.push(o)}return out}
+async function clearAll(silent){try{await M.clear()}catch(e){}refreshCards();if(!silent)tst('本机视频已清空')}
+async function clearUI(){var u=await usage();if(!u.n){tst('这台电脑上还没有导入过视频');return}if(!await ibConfirmX('⚠ 清空这台电脑上的视频？\n\n共 '+u.n+' 段 · '+mb(u.size)+' MB。只删这台电脑的本机媒体库；聊天里的视频卡片仍在（留封面与提示词），手机上的视频不受影响。'))return;await clearAll(true);tst('已清空本机视频')}
+function exportRow(bd){try{if(!bd||$('io-media'))return;var w=D.createElement('label');w.className='io-media-row';w.innerHTML='<input type="checkbox" id="io-media"><span>连本机媒体库一起导出<i id="io-media-sz">（读取中…）</i></span>';bd.appendChild(w);usage().then(function(u){var z=$('io-media-sz');if(z)z.textContent=u.n?('（视频 '+u.n+' 段 · '+mb(u.size)+' MB；体积大，默认不勾。格式与手机端一致，两端都能导入）'):'（这台电脑上还没有视频）';if(!u.n){var c=$('io-media');if(c)c.disabled=true}})}catch(e){}}
+/* ── 卡片：只接管「已生成」的结果；进行中 / 待确认 / 失败仍走手机端专属操作卡 ── */
+var PLAY='<svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg>';
+function card(d){var r=d&&d.res;if(!(r&&r.ok===true&&r.vid))return null;var el=D.createElement('div');el.className='gen-photo vg-photo';el.setAttribute('data-vid',r.vid);var tall=r.ratio==='9:16'||(r.w&&r.h&&r.h>r.w);var sec=r.dur?Math.round(r.dur):(parseInt(r.sec,10)||0);
+  el.innerHTML='<div class="vg-box'+(tall?' vg-tall':'')+'">'+(r.poster?'<img alt="">':'<div class="vg-blank"></div>')+'<span class="vg-play">'+PLAY+'</span>'+(sec?'<span class="vg-dur">'+sec+'s</span>':'')+'</div><span class="gp-cap">视频'+(sec?(' · '+sec+' 秒'):'')+((r.w&&r.h)?(' · '+r.w+'×'+r.h):'')+'</span><span class="gp-cap gp-prbtn">查看提示词</span><div class="gp-pr"></div>';
+  var im=el.querySelector('img');if(im)im.src=r.poster;
+  el.querySelector('.gp-pr').textContent=String(r.prompt||r.oprompt||'');var pb=el.querySelector('.gp-prbtn');pb.addEventListener('click',function(e){e.stopPropagation();el.classList.toggle('gp-open');pb.textContent=el.classList.contains('gp-open')?'收起提示词':'查看提示词'});
+  el.querySelector('.vg-box').addEventListener('click',function(e){e.stopPropagation();open(r)});
+  M.get(r.vid).then(function(x){if(!(x&&x.blob))el.classList.add('vg-gone')}).catch(function(){el.classList.add('vg-gone')});
+  return el}
+/* ── 观看层（与手机端同款自绘控制条；Esc / 叉号关闭；「保存到电脑」下载原文件） ── */
+var VV=null,VVurl='',VVrec=null;
+function fmtT(s){s=Math.max(0,Math.floor(s||0));return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2)}
+function viewer(){if(VV)return VV;VV=D.createElement('div');VV.id='ib-vgview';VV.innerHTML='<div class="vgv-top"><button type="button" class="vgv-x" aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button><span class="vgv-t">视频</span><button type="button" class="vgv-save">保存到电脑</button></div><div class="vgv-stage"><video playsinline preload="metadata"></video><button type="button" class="vgv-big" aria-label="播放">'+PLAY+'</button></div><div class="vgv-bar"><button type="button" class="vgv-pp" aria-label="播放 / 暂停">'+PLAY+'</button><div class="vgv-track"><i></i></div><span class="vgv-time">0:00 / 0:00</span><button type="button" class="vgv-mute" aria-label="静音">音</button></div><p class="vgv-cap"></p>';
+  D.body.appendChild(VV);var v=VV.querySelector('video'),pp=VV.querySelector('.vgv-pp'),big=VV.querySelector('.vgv-big'),tr=VV.querySelector('.vgv-track'),bar=tr.querySelector('i'),tm=VV.querySelector('.vgv-time'),mu=VV.querySelector('.vgv-mute');
+  var PAUSE='<svg viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
+  var tog=function(){if(v.paused){v.play().catch(function(){})}else v.pause()};
+  pp.addEventListener('click',tog);big.addEventListener('click',tog);v.addEventListener('click',tog);
+  v.addEventListener('play',function(){pp.innerHTML=PAUSE;big.style.display='none'});v.addEventListener('pause',function(){pp.innerHTML=PLAY;big.style.display=''});
+  v.addEventListener('timeupdate',function(){var d=v.duration||0;bar.style.width=(d?Math.min(100,v.currentTime/d*100):0)+'%';tm.textContent=fmtT(v.currentTime)+' / '+fmtT(d)});
+  v.addEventListener('loadedmetadata',function(){tm.textContent='0:00 / '+fmtT(v.duration)});
+  v.addEventListener('ended',function(){big.style.display=''});
+  tr.addEventListener('click',function(e){var r=tr.getBoundingClientRect();var p=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));if(v.duration)v.currentTime=p*v.duration});
+  mu.addEventListener('click',function(){v.muted=!v.muted;mu.classList.toggle('on',v.muted);mu.textContent=v.muted?'静':'音'});
+  VV.querySelector('.vgv-x').addEventListener('click',close);
+  VV.querySelector('.vgv-save').addEventListener('click',function(){if(!VVrec||!VVrec.blob)return;var ext=/webm/i.test(VVrec.mime||'')?'webm':'mp4';var nm='IB-video-'+new Date(VVrec.created||Date.now()).toISOString().slice(0,19).replace(/[:T]/g,'-')+'.'+ext;var a=D.createElement('a');a.href=URL.createObjectURL(VVrec.blob);a.download=nm;D.body.appendChild(a);a.click();D.body.removeChild(a);setTimeout(function(){try{URL.revokeObjectURL(a.href)}catch(e){}},4000);tst('已保存到下载目录：'+nm)});
+  D.addEventListener('keydown',function(e){if(e.key==='Escape'&&VV.classList.contains('show')){e.preventDefault();e.stopPropagation();close()}else if(e.key===' '&&VV.classList.contains('show')&&e.target===D.body){e.preventDefault();tog()}},true);
+  return VV}
+function close(){if(!VV)return;var v=VV.querySelector('video');try{v.pause();v.removeAttribute('src');v.load()}catch(e){}if(VVurl){try{URL.revokeObjectURL(VVurl)}catch(e){}VVurl=''}VVrec=null;VV.classList.remove('show')}
+async function open(r){var rec=null;try{rec=await M.get(r.vid)}catch(e){}
+  if(!(rec&&rec.blob)){try{await ibDlg({title:'这段视频不在这台电脑上',msg:'视频本体存在手机的本机媒体库里，聊天记录只带了封面和提示词。\n\n想在电脑上看：手机端导出备份时勾选「连本机媒体库一起导出」，再在这里点 Import 导入那份备份，卡片就能播放了。',okLabel:'知道了'})}catch(e){tst('这段视频不在这台电脑上：手机端导出备份时勾选「连本机媒体库一起导出」再导入')}return}
+  var vv=viewer();var v=vv.querySelector('video');VVrec=rec;if(VVurl){try{URL.revokeObjectURL(VVurl)}catch(e){}}VVurl=URL.createObjectURL(rec.blob);v.src=VVurl;v.muted=false;var mu=vv.querySelector('.vgv-mute');mu.classList.remove('on');mu.textContent='音';
+  vv.querySelector('.vgv-t').textContent='视频'+(rec.dur?(' · '+Math.round(rec.dur)+' 秒'):'')+(rec.w?(' · '+rec.w+'×'+rec.h):'')+' · '+mb(rec.size||rec.blob.size||0)+' MB';
+  vv.querySelector('.vgv-cap').textContent=String(rec.prompt||r.prompt||'');vv.classList.add('show');try{await v.play()}catch(e){}}
+/* ── 样式 ── */
+function css(){if($('ib-video-desk-css'))return;var s=D.createElement('style');s.id='ib-video-desk-css';s.textContent=
+  '.gen-photo.vg-photo{margin:8px 0 4px;max-width:250px;box-sizing:border-box;background:rgba(245,250,255,0.72);border:1px solid rgba(185,220,250,0.45);border-radius:16px;padding:7px 7px 6px;box-shadow:0 8px 24px rgba(0,0,0,0.14),inset 0 1px 0 rgba(255,255,255,0.3);transform:rotate(0.4deg);font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;animation:vgIn 0.5s cubic-bezier(0.22,1,0.36,1)}'
+  +'@keyframes vgIn{from{opacity:0;transform:translateY(6px) rotate(0.4deg)}to{opacity:1;transform:rotate(0.4deg)}}'
+  +'body.theme-infernal .gen-photo.vg-photo{background:rgba(26,34,56,0.82);border-color:rgba(165,188,230,0.22);box-shadow:0 8px 24px rgba(0,0,0,0.38),inset 0 1px 0 rgba(200,220,255,0.06)}'
+  +'.vg-photo .vg-box{position:relative;border-radius:11px;overflow:hidden;background:#0f1626;aspect-ratio:16/9;cursor:pointer}.vg-photo .vg-box.vg-tall{aspect-ratio:9/16;max-width:190px;margin:0 auto}.vg-photo .vg-box img,.vg-photo .vg-box .vg-blank{display:block;width:100%;height:100%;object-fit:cover}.vg-photo .vg-box .vg-blank{background:linear-gradient(160deg,#2a3650,#111827)}'
+  +'.vg-photo .vg-play{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;background:rgba(255,255,255,.86);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,.3);transition:transform 0.2s}.vg-photo .vg-box:hover .vg-play{transform:scale(1.08)}.vg-photo .vg-play svg{width:22px;height:22px;margin-left:3px;fill:#1c2a3f}'
+  +'.vg-photo .vg-dur{position:absolute;right:8px;bottom:8px;padding:2px 7px;border-radius:999px;background:rgba(0,0,0,.55);color:#fff;font-size:.62rem;letter-spacing:.06em}'
+  +'.vg-photo.vg-gone .vg-play{background:rgba(255,255,255,.45)}.vg-photo.vg-gone .vg-box::after{content:"视频不在这台电脑";position:absolute;left:8px;top:8px;padding:2px 8px;border-radius:999px;background:rgba(0,0,0,.55);color:#fff;font-size:.62rem}'
+  +'.vg-photo .gp-cap{display:block;padding:6px 4px 1px;font-size:0.6rem;letter-spacing:0.08em;color:#6c7d99;text-align:center;font-weight:300}body.theme-infernal .vg-photo .gp-cap{color:#93a6c6}'
+  +'.vg-photo .gp-prbtn{cursor:pointer;text-decoration:underline;text-underline-offset:2px}'
+  +'.vg-photo .gp-pr{display:none;margin:5px 4px 4px;padding:8px 10px;border-radius:10px;background:rgba(120,150,195,0.08);border:1px solid rgba(165,188,230,0.25);font-size:0.68rem;line-height:1.6;color:inherit;opacity:.85;text-align:left;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow:auto}.vg-photo.gp-open .gp-pr{display:block}'
+  +'#ib-vgview{position:fixed;inset:0;z-index:100050;background:rgba(6,10,20,.985);display:none;flex-direction:column;color:#e8eef8;font-family:"Noto Sans SC",sans-serif}#ib-vgview.show{display:flex}'
+  +'#ib-vgview .vgv-top{display:flex;align-items:center;gap:10px;padding:14px 18px 10px}#ib-vgview .vgv-t{flex:1;min-width:0;font-size:.82rem;color:rgba(232,238,248,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +'#ib-vgview button{border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.08);color:#e8eef8;border-radius:999px;font-family:inherit;font-size:.78rem;padding:6px 14px;cursor:pointer}#ib-vgview button:hover{background:rgba(255,255,255,.16)}#ib-vgview .vgv-x{width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center}#ib-vgview .vgv-x svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}'
+  +'#ib-vgview .vgv-stage{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;padding:0 24px}#ib-vgview .vgv-stage video{width:100%;height:100%;object-fit:contain;background:transparent;outline:none}/* 小视频也放大铺满舞台、等比留边 */'
+  +'#ib-vgview .vgv-big{position:absolute;left:50%;top:50%;width:68px;height:68px;margin:-34px 0 0 -34px;padding:0!important;border-radius:50%!important;background:rgba(255,255,255,.88)!important;border:none!important;display:flex;align-items:center;justify-content:center}#ib-vgview .vgv-big svg{width:30px;height:30px;margin-left:4px;fill:#1c2a3f}'
+  +'#ib-vgview .vgv-bar{display:flex;align-items:center;gap:12px;padding:12px 24px 6px;max-width:980px;width:100%;box-sizing:border-box;margin:0 auto}#ib-vgview .vgv-pp{width:38px;height:38px;padding:0!important;display:flex;align-items:center;justify-content:center}#ib-vgview .vgv-pp svg{width:18px;height:18px;fill:currentColor}#ib-vgview .vgv-track{flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.22);position:relative;cursor:pointer}#ib-vgview .vgv-track i{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:3px;background:#fff}#ib-vgview .vgv-time{font-size:.74rem;font-variant-numeric:tabular-nums;color:rgba(232,238,248,.8)}#ib-vgview .vgv-mute{width:38px;height:38px;padding:0!important}#ib-vgview .vgv-mute.on{opacity:.55}'
+  +'#ib-vgview .vgv-cap{margin:0 auto 18px;max-width:980px;width:100%;box-sizing:border-box;padding:0 24px;font-size:.76rem;line-height:1.6;color:rgba(232,238,248,.72);max-height:84px;overflow:auto;white-space:pre-wrap;word-break:break-word}'
+  +'.io-media-row{display:flex;gap:10px;align-items:flex-start;margin-top:12px;padding:10px 12px;border-radius:10px;border:1px solid rgba(165,188,230,0.28);background:rgba(175,195,228,0.08);font-size:0.8rem;line-height:1.6;color:var(--text-secondary);cursor:pointer}.io-media-row input{margin-top:4px;flex:none;accent-color:var(--accent-light)}.io-media-row i{display:block;font-style:normal;font-size:0.72rem;color:var(--text-muted)}body:not(.theme-infernal) .io-media-row{color:#33507d;background:rgba(255,255,255,0.35);border-color:rgba(120,150,195,0.3)}.io-media-row input:disabled+span{opacity:0.6}/* 字色与导出说明（.io-note）同一套：明亮 #33507d、暗色 --text-secondary */';
+  D.head.appendChild(s)}
+function boot(){css();try{if(typeof IO_STORE_CN==='object'&&IO_STORE_CN)IO_STORE_CN.__media='本机媒体库（视频）'}catch(e){}}
+W._ibVidD={card:card,open:open,close:close,importMedia:importMedia,exportMedia:exportMedia,exportRow:exportRow,usage:usage,clearAll:clearAll,clearUI:clearUI,refresh:refreshCards,media:M};
+if(D.readyState==='loading')D.addEventListener('DOMContentLoaded',boot);else boot();
+})();
+</script>
+<script id="ib-chatimport-desk">
+(function(){
+'use strict';
+var HK='ib_ci_hist',CAP=120000,TCAP=30000,SRC={chatgpt:'ChatGPT',claude:'Claude',json:'JSON',txt:'文本'};
+function $(id){return document.getElementById(id)}
+function E(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function T(x){try{toast(x)}catch(e){}}
+function h32(s){var h=0x811c9dc5;s=String(s);for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0}return ('0000000'+h.toString(16)).slice(-8)}
+function p2(n){return (n<10?'0':'')+n}
+function dstr(t){if(!t)return '—';var d=new Date(t);return d.getFullYear()+'.'+p2(d.getMonth()+1)+'.'+p2(d.getDate())}
+function tstr(t){var d=new Date(t);return dstr(t)+' '+p2(d.getHours())+':'+p2(d.getMinutes())}
+function toMs(v){if(v==null||v===''||typeof v==='boolean')return 0;if(typeof v==='number')return isFinite(v)&&v>0?(v<1e11?Math.round(v*1000):Math.round(v)):0;
+  var s=String(v).trim();if(!s)return 0;if(/^\d+(\.\d+)?$/.test(s)){var n=parseFloat(s);return n<1e11?Math.round(n*1000):Math.round(n)}
+  var t=Date.parse(s);if(isNaN(t))t=Date.parse(s.replace(/(\d)\s*(am|pm)\s*$/i,'$1 $2'));return isNaN(t)?0:t}
+function clip(t,n){t=String(t||'');return t.length>n?t.slice(0,n)+'\n\n…（导入时截断）':t}
+/* ── 电脑端适配：好友表、整批删除、摘要作废、好友列表刷新与重开当前会话 ── */
+function cfgs(){try{return (typeof apiConfigs!=='undefined'&&Array.isArray(apiConfigs))?apiConfigs.filter(function(c){return c&&c.id}):[]}catch(e){return []}}
+function nameOf(c){return (c&&(c.nickname||c.model))||'TA'}
+function dbOk(){try{return typeof db!=='undefined'&&!!db}catch(e){return false}}
+function dbDeleteMany(st,keys){return new Promise(function(res,rej){if(!keys||!keys.length){res();return}var t=db.transaction(st,'readwrite'),o=t.objectStore(st);keys.forEach(function(k){try{o.delete(k)}catch(e){}});t.oncomplete=function(){try{_ibFsDirty=true}catch(e){}res()};t.onerror=function(){rej(t.error)}})}
+async function _msgEdInvalM(cfg,thr,ts){try{var key='sum_'+(thr?thr.id:cfg.id);var x=await dbGet('chatSummaries',key);if(x&&Number(x.coveredUpTo||0)>=ts)await dbDelete('chatSummaries',key)}catch(e){}}
+function _friendsBump(){try{if(typeof loadFriendsList==='function')loadFriendsList()}catch(e){}}
+/* ── 读文件：zip 只解目录与目标条目 ── */
+async function unzip(file){var size=file.size,tl=Math.min(size,65557);var tail=new Uint8Array(await file.slice(size-tl).arrayBuffer());var eo=-1;
+  for(var i=tail.length-22;i>=0;i--){if(tail[i]===0x50&&tail[i+1]===0x4b&&tail[i+2]===0x05&&tail[i+3]===0x06){eo=i;break}}
+  if(eo<0)throw new Error('压缩包读不出目录，可能不完整');var dv=new DataView(tail.buffer,tail.byteOffset,tail.byteLength);
+  var n=dv.getUint16(eo+10,true),cdSize=dv.getUint32(eo+12,true),cdOff=dv.getUint32(eo+16,true);
+  if(cdOff===0xffffffff||n===0xffff)throw new Error('压缩包太大（zip64），请先解压，再选里面的 conversations.json');
+  var cd=new Uint8Array(await file.slice(cdOff,cdOff+cdSize).arrayBuffer()),cv=new DataView(cd.buffer,cd.byteOffset,cd.byteLength),p=0,ents=[],td=new TextDecoder();
+  for(var k=0;k<n&&p+46<=cd.length;k++){if(cv.getUint32(p,true)!==0x02014b50)break;var fl=cv.getUint16(p+28,true),xl=cv.getUint16(p+30,true),cl=cv.getUint16(p+32,true);
+    ents.push({name:td.decode(cd.subarray(p+46,p+46+fl)),meth:cv.getUint16(p+10,true),csz:cv.getUint32(p+20,true),usz:cv.getUint32(p+24,true),lho:cv.getUint32(p+42,true)});p+=46+fl+xl+cl}
+  var pick=ents.filter(function(e){return /(^|\/)conversations[^\/]*\.json$/i.test(e.name)});
+  if(!pick.length){var js=ents.filter(function(e){return /\.jsonl?$/i.test(e.name)&&!/(^|\/)__MACOSX\//.test(e.name)}).sort(function(a,b){return b.usz-a.usz});if(js.length)pick=[js[0]]}
+  if(!pick.length)throw new Error('压缩包里没有 JSON 聊天记录');
+  var out=[];for(var q=0;q<pick.length;q++){var e=pick[q];var lh=new DataView(await file.slice(e.lho,e.lho+30).arrayBuffer());if(lh.getUint32(0,true)!==0x04034b50)throw new Error('压缩包条目损坏：'+e.name);
+    var st=e.lho+30+lh.getUint16(26,true)+lh.getUint16(28,true),blob=file.slice(st,st+e.csz),txt;
+    if(e.meth===0)txt=await blob.text();
+    else if(e.meth===8){var ds;try{ds=new DecompressionStream('deflate-raw')}catch(x){throw new Error('这台设备的内核解不开压缩包，请先解压，再选里面的 conversations.json')}txt=await new Response(blob.stream().pipeThrough(ds)).text()}
+    else throw new Error('压缩方式不认识，请先解压再选');
+    out.push({name:e.name,text:txt})}
+  return out}
+async function read(file){if(!file)throw new Error('没有选中文件');var head=new Uint8Array(await file.slice(0,4).arrayBuffer());
+  var isZip=head[0]===0x50&&head[1]===0x4b&&head[2]===0x03&&head[3]===0x04;
+  if(isZip){var parts=await unzip(file);if(parts.length===1)return {name:parts[0].name,text:parts[0].text};
+    var roots=[];parts.forEach(function(p){var r=parseJ(p.text);if(Array.isArray(r))roots=roots.concat(r);else roots.push(r)});return {name:parts.map(function(p){return p.name}).join(' + '),root:roots}}
+  if(file.size>400e6)throw new Error('文件太大（超过 400 MB），请先拆开');
+  return {name:file.name||'',text:await file.text()}}
+function parseJ(text){text=String(text||'').replace(/^\ufeff/,'');try{return JSON.parse(text)}catch(e){}
+  var lines=text.split(/\r?\n/).filter(function(l){return l.trim()}),arr=[];if(!lines.length)throw new Error('文件是空的');
+  for(var i=0;i<lines.length;i++){try{arr.push(JSON.parse(lines[i]))}catch(e){throw new Error('读不出：不是 JSON / JSONL 文件')}}return arr}
+
+/* ── ChatGPT ── */
+function isGPT(r){return Array.isArray(r)&&r.some(function(c){return c&&c.mapping&&typeof c.mapping==='object'})}
+function gptClean(t){return String(t).replace(/[ \t]*\ue200[^\ue201]*\ue201/g,'').replace(/[\ue000-\uf8ff]/g,'').replace(/[ \t]*【\d+(?::\d+)?†[^】]{0,80}】/g,'').replace(/[ \t]+\n/g,'\n').trim()}/* 联网引用的私用区标记与旧式【n†source】连同前面的空格一起去掉 */
+function gptParts(c){var out=[];(Array.isArray(c.parts)?c.parts:[]).forEach(function(p){if(typeof p==='string'){if(p.trim())out.push(p)}else if(p&&typeof p==='object'){var ty=String(p.content_type||p.type||'');
+    if(p.asset_pointer||/image/.test(ty))out.push('［图片］');else if(/audio/.test(ty))out.push('［语音］');else if(typeof p.text==='string'&&p.text.trim())out.push(p.text)}});return out.join('\n\n')}
+function gptThink(c){var a=Array.isArray(c.thoughts)?c.thoughts:[];return a.map(function(x){var s=String((x&&x.summary)||'').trim(),b=String((x&&x.content)||'').trim();return (s&&b&&b.indexOf(s)!==0?s+'\n':'')+(b||s)}).filter(Boolean).join('\n\n')}
+function gptPath(cv){var map=cv.mapping||{},node=cv.current_node,seq=[],g=0;
+  if(!node||!map[node]){var best=null,bt=-1;Object.keys(map).forEach(function(k){var nd=map[k];if(nd&&(!nd.children||!nd.children.length)){var t=(nd.message&&nd.message.create_time)||0;if(t>=bt){bt=t;best=k}}});node=best}
+  while(node&&map[node]&&g++<200000){seq.push(map[node]);node=map[node].parent}return seq.reverse()}
+function parseGPT(arr){var out=[];arr.forEach(function(cv,ci){if(!cv||!cv.mapping)return;var msgs=[],pend='';
+  gptPath(cv).forEach(function(nd){var m=nd&&nd.message;if(!m)return;var role=m.author&&m.author.role,md=m.metadata||{},c=m.content||{},ct=String(c.content_type||'');
+    if(md.is_visually_hidden_from_conversation)return;if(role!=='user'&&role!=='assistant')return;if(role==='assistant'&&m.recipient&&m.recipient!=='all')return;
+    if(ct==='thoughts'){var th=gptThink(c);if(th)pend+=(pend?'\n\n':'')+th;return}
+    var t=null;if(ct==='text'||ct==='multimodal_text')t=gptParts(c);else if(ct==='code'&&role==='assistant'&&c.text)t='```'+(c.language&&c.language!=='unknown'?c.language:'')+'\n'+c.text+'\n```';
+    if(t==null)return;t=gptClean(t);if(!t)return;
+    var o={role:role,text:t,ts:toMs(m.create_time),mid:String(m.id||nd.id||msgs.length)};if(role==='assistant'&&pend){o.think=pend;pend=''}if(role==='user')pend='';msgs.push(o)});
+  if(msgs.length)out.push({id:String(cv.conversation_id||cv.id||('c'+ci)),title:String(cv.title||'').trim()||'未命名对话',msgs:msgs,t0:toMs(cv.create_time),named:true})});return out}
+/* ── Claude ── */
+function isClaude(r){return Array.isArray(r)&&r.some(function(c){return c&&Array.isArray(c.chat_messages)})}
+function fileTag(f){var nm=String((f&&(f.file_name||f.name))||'').slice(0,80),img=/image/i.test(String((f&&(f.file_kind||f.file_type||f.type))||''))||/\.(png|jpe?g|gif|webp|heic|bmp)$/i.test(nm);return '［'+(img?'图片':'附件')+(nm?' · '+nm:'')+'］'}
+function parseClaude(arr){var out=[];arr.forEach(function(cv,ci){if(!cv||!Array.isArray(cv.chat_messages))return;var msgs=[];
+  cv.chat_messages.forEach(function(m,mi){if(!m)return;var role=m.sender==='human'?'user':(m.sender==='assistant'?'assistant':'');if(!role)return;var txt=[],th=[],ex=[];
+    if(Array.isArray(m.content))m.content.forEach(function(b){if(!b)return;if(b.type==='text'&&b.text)txt.push(String(b.text));else if(b.type==='thinking'&&b.thinking)th.push(String(b.thinking));else if(b.type==='tool_use'&&b.input&&(b.name==='artifacts'||b.input.title))ex.push('［Artifact · '+String(b.input.title||b.input.id||'').slice(0,60)+'］')});
+    if(!txt.length&&m.text)txt.push(String(m.text));
+    (Array.isArray(m.attachments)?m.attachments:[]).forEach(function(a){if(a&&(a.file_name||a.name))ex.push('［附件 · '+String(a.file_name||a.name).slice(0,80)+'］')});
+    (Array.isArray(m.files)?m.files:[]).forEach(function(f){if(f)ex.push(fileTag(f))});
+    var t=txt.join('\n\n').trim();if(ex.length)t=(t?t+'\n\n':'')+ex.join('\n');if(!t)return;
+    var o={role:role,text:t,ts:toMs(m.created_at||m.updated_at),mid:String(m.uuid||('m'+mi))};if(role==='assistant'&&th.length)o.think=th.join('\n\n');msgs.push(o)});
+  if(msgs.length)out.push({id:String(cv.uuid||('c'+ci)),title:String(cv.name||'').trim()||'未命名对话',msgs:msgs,t0:toMs(cv.created_at),named:true})});return out}
+/* ── 其它 JSON / JSONL：找消息数组 + 猜字段（字段可写 a.b 路径） ── */
+var KC=['content','text','mes','message','body','msg','value','content.text','content.parts','message.content','message.text','data.content','data.text'];
+var KR=['role','sender','author.role','is_user','isUser','fromMe','from_me','is_me','from','speaker','author','name','user'];
+var KT=['timestamp','create_time','created_at','createdAt','send_date','time','date','ts','created','sent_at','sentAt','datetime','updated_at'];
+function gp(o,p){if(!o||!p)return undefined;var a=String(p).split('.');for(var i=0;i<a.length;i++){if(o==null||typeof o!=='object')return undefined;o=o[a[i]]}return o}
+function txtOf(v){if(v==null)return '';if(typeof v==='string')return v;if(typeof v==='number')return String(v);
+  if(Array.isArray(v))return v.map(function(p){if(typeof p==='string')return p;if(p&&typeof p==='object'){var ty=String(p.type||p.content_type||'');if(/image/.test(ty)||p.image_url||p.asset_pointer)return '［图片］';if(typeof p.text==='string')return p.text;if(typeof p.content==='string')return p.content}return ''}).filter(function(x){return x&&String(x).trim()}).join('\n\n');
+  if(typeof v==='object'){if(typeof v.text==='string')return v.text;if(typeof v.content==='string')return v.content;if(Array.isArray(v.parts))return txtOf(v.parts)}return ''}
+function guess(objs,keys,kind){var best='',bn=0;keys.forEach(function(k){var n=0;objs.forEach(function(o){var v=gp(o,k);if(kind==='c'){if(txtOf(v).trim())n++}else if(kind==='r'){if(typeof v==='boolean'||(typeof v==='string'&&v.trim()&&v.length<=40))n++}else if(toMs(v))n++});if(n>bn){bn=n;best=k}});return bn>=Math.max(1,Math.ceil(objs.length*0.5))?best:''}
+function findArrays(root){var strong=[],weak=[];(function walk(v,d,par){if(d>7||strong.length+weak.length>=3000)return;
+    if(Array.isArray(v)){var objs=v.filter(function(x){return x&&typeof x==='object'&&!Array.isArray(x)});if(objs.length&&objs.length>=v.length*0.6&&guess(objs,KC,'c')){if(guess(objs,KR,'r')){strong.push({arr:objs,par:par});return}weak.push({arr:objs,par:par})}v.forEach(function(x){walk(x,d+1,null)})}
+    else if(v&&typeof v==='object')Object.keys(v).forEach(function(k){walk(v[k],d+1,v)})})(root,0,null);return strong.length?strong:weak}
+function userVal(objs,rk){var vals={};objs.forEach(function(o){var v=gp(o,rk);if(typeof v==='boolean')vals[String(v)]=(vals[String(v)]||0)+1;else if(typeof v==='string'&&v.trim()){var s=v.trim().toLowerCase();vals[s]=(vals[s]||0)+1}});
+  if(vals['true'])return 'true';var U=['user','human','me','我','用户','self','you','myself'];for(var i=0;i<U.length;i++)if(vals[U[i]])return U[i];
+  var f=objs.map(function(o){return gp(o,rk)}).filter(function(v){return typeof v==='string'&&v.trim()})[0];return f?String(f).trim().toLowerCase():'user'}
+function roleOf(o,v,uv){if(o&&o.is_system===true)return '';if(typeof v==='boolean')return String(v)===uv?'user':'assistant';var s=String(v==null?'':v).trim().toLowerCase();if(!s)return '';if(s===uv)return 'user';if(/^(system|tool|function|developer)$/.test(s))return '';return 'assistant'}
+function parseGeneric(root,ov,fname){var arrs=findArrays(root);if(!arrs.length)return {convs:[],map:{r:'',c:'',t:'',u:''}};
+  var all=[];arrs.forEach(function(a){all=all.concat(a.arr.slice(0,200))});ov=ov||{};
+  var map={c:ov.c||guess(all,KC,'c'),r:ov.r||guess(all,KR,'r'),t:ov.t!=null&&ov.t!==undefined&&ov.hasOwnProperty('t')?ov.t:guess(all,KT,'t')};map.u=String(ov.u||userVal(all,map.r)).trim().toLowerCase();
+  var out=[];arrs.forEach(function(a,ai){var par=a.par||{},o0=a.arr[0]||{};var nm0=String(par.title||par.name||par.subject||par.topic||par.chat_name||(o0.character_name?('与 '+o0.character_name+' 的对话'):'')||'').trim();var title=nm0||((fname||'导入的对话')+(arrs.length>1?' · '+(ai+1):''));
+    var msgs=[];a.arr.forEach(function(o,i){var role=roleOf(o,gp(o,map.r),map.u),t=txtOf(gp(o,map.c)).trim();if(!role||!t)return;msgs.push({role:role,text:t,ts:map.t?toMs(gp(o,map.t)):0,i:i})});
+    if(!msgs.length)return;var ck=h32(title+'|'+msgs[0].text.slice(0,200));msgs.forEach(function(m){m.mid='g'+h32(ck+'|'+m.i+'|'+m.role+'|'+m.text.slice(0,400));delete m.i});
+    out.push({id:'j'+ck,title:title,msgs:msgs,t0:0,named:!!nm0})});return {convs:out,map:map}}
+
+var UW=['用户','我','我方','自己','本人','user','me','you','human'];
+function escRe(x){return String(x).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}
+function dayMs(x,end){x=String(x||'').trim();if(!x)return 0;var m=/^(\d{4})\s*[-\/.年]\s*(\d{1,2})\s*[-\/.月]\s*(\d{1,2})\s*日?(?:\s+(\d{1,2})[:：](\d{2}))?$/.exec(x)||/^(\d{4})(\d{2})(\d{2})$/.exec(x);if(!m)return NaN;
+  var hm=m[4]!=null&&m[4]!=='';var d=new Date(+m[1],+m[2]-1,+m[3],hm?+m[4]:(end?23:0),hm?+m[5]:(end?59:0),(end&&!hm)?59:0,0);return (isNaN(d.getTime())||d.getMonth()!==+m[2]-1)?NaN:d.getTime()}
+function textTimes(ms,t0,t1,now){var n=ms.length;if(!n)return;if(t0&&t1&&t1>t0){var span=t1-t0;ms.forEach(function(m,i){m.ts=t0+Math.floor(i*span/n)})}
+  else if(t0)ms.forEach(function(m,i){m.ts=t0+i*60000});else if(t1)ms.forEach(function(m,i){m.ts=t1-(n-i)*60000});else ms.forEach(function(m,i){m.ts=now-(n-i)*60000})}
+function parseChatText(text,ov,fname){ov=ov||{};var lines=String(text||'').replace(/^\ufeff/,'').replace(/\r\n?/g,'\n').split('\n');
+  var gen=/^\s*[【\[]?\s*([^\s：:【】\[\]]{1,16})\s*[】\]]?\s*[：:]\s?(.*)$/,cnt={},first={};
+  lines.forEach(function(l,i){var m=gen.exec(l);if(m){var k=m[1];if(!(k in cnt)){cnt[k]=0;first[k]=i}cnt[k]++}});
+  var top=Object.keys(cnt).filter(function(k){return cnt[k]>=2}).sort(function(x,y){return cnt[y]-cnt[x]||first[x]-first[y]}).slice(0,2);
+  var u=String(ov.tu||'').trim(),a=String(ov.ta||'').trim();
+  if(!u)u=top.filter(function(k){return UW.indexOf(k.toLowerCase())>=0&&k!==a})[0]||top.filter(function(k){return k!==a}).sort(function(x,y){return first[x]-first[y]})[0]||'';
+  if(!a)a=top.filter(function(k){return k!==u})[0]||'';
+  var tm={u:u,a:a};if(!u||!a||u===a)return {convs:[],tmap:tm};
+  var re=new RegExp('^\\s*[【\\[]?\\s*('+escRe(u)+'|'+escRe(a)+')\\s*[】\\]]?\\s*[：:]\\s?(.*)$'),msgs=[],cur=null;
+  lines.forEach(function(l){var m=re.exec(l);if(m){cur={role:m[1]===u?'user':'assistant',text:m[2]||''};msgs.push(cur)}else if(cur)cur.text+='\n'+l});
+  msgs=msgs.map(function(x){x.text=x.text.replace(/^\n+/,'').replace(/\s+$/,'');return x}).filter(function(x){return x.text.trim()});
+  if(!msgs.length)return {convs:[],tmap:tm};
+  var title=String(fname||'').replace(/^.*\//,'').replace(/\.(txt|md|text)$/i,'').trim()||'导入的对话';var ck=h32(title+'|'+msgs[0].text.slice(0,200));
+  msgs.forEach(function(m,i){m.mid='t'+h32(ck+'|'+i+'|'+m.role+'|'+m.text.slice(0,400))});textTimes(msgs,+ov.t0||0,+ov.t1||0,Date.now());
+  var cv={id:'t'+ck,title:title,msgs:msgs,t0:0,synth:true,named:false};fixTimes([cv],Date.now());cv.nd=0;return {convs:[cv],tmap:tm}}
+/* 时间补齐：缺时间的按顺序接在前一条后 1 秒；整段都没有时间的，每条隔 1 分钟排在导入时刻之前；会话内严格递增 */
+function fixTimes(convs,now){var k=0;convs.forEach(function(cv){var ms=cv.msgs,nd=0,first=-1;for(var i=0;i<ms.length;i++){if(ms[i].ts>0){first=i;break}}
+    if(first<0){ms.forEach(function(m,i){m.ts=now-(ms.length-i)*60000-(k++)});nd=ms.length}
+    else{for(var j=first-1;j>=0;j--){ms[j].ts=ms[j+1].ts-1000;nd++}for(var q=first+1;q<ms.length;q++){if(!(ms[q].ts>0)){ms[q].ts=ms[q-1].ts+1000;nd++}else if(ms[q].ts<=ms[q-1].ts)ms[q].ts=ms[q-1].ts+1}}
+    cv.nd=nd;cv.t0=ms[0].ts;cv.t1=ms[ms.length-1].ts;cv.nu=ms.filter(function(m){return m.role==='user'}).length;cv.nth=ms.filter(function(m){return m.think}).length})}
+function parseText(text,name,ov,root){var r=root;if(r===undefined){try{r=parseJ(text)}catch(e){if(!String(text||'').trim())throw e;var tt=parseChatText(text,ov,name);return {src:'txt',convs:tt.convs,map:null,tmap:tt.tmap,root:null}}}/* 不是 JSON 就按逐行文本读；认不出双方名字也留在文本模式，让用户在「对话格式与时间」里手填 */var src='json',convs=[],map=null;
+  if(r&&!Array.isArray(r)&&typeof r==='object'){if(r.mapping&&typeof r.mapping==='object')r=[r];else if(Array.isArray(r.chat_messages))r=[r];else if(Array.isArray(r.conversations))r=r.conversations}
+  if(isGPT(r)){src='chatgpt';convs=parseGPT(r)}else if(isClaude(r)){src='claude';convs=parseClaude(r)}else{var g=parseGeneric(r,ov,String(name||'').replace(/^.*\//,'').replace(/\.(jsonl?|zip|txt)$/i,''));convs=g.convs;map=g.map}
+  fixTimes(convs,Date.now());return {src:src,convs:convs,map:map,root:r}}
+
+/* ── 落库 ── */
+function sigsOf(fid){return new Promise(function(res,rej){var sig=new Set();try{var rq=db.transaction('chatMessages').objectStore('chatMessages').index('byFriend').openCursor(IDBKeyRange.only(fid));
+  rq.onsuccess=function(){var c=rq.result;if(!c){res(sig);return}var v=c.value;if(v&&v.imp&&v.imp.s)sig.add(v.imp.s+'|'+v.imp.c+'|'+v.imp.m);c.continue()};rq.onerror=function(){rej(rq.error)}}catch(e){rej(e)}})}
+function hist(){try{var a=JSON.parse(localStorage.getItem(HK)||'[]');return Array.isArray(a)?a:[]}catch(e){return []}}
+function saveHist(a){try{localStorage.setItem(HK,JSON.stringify(a.slice(0,8)))}catch(e){}}
+async function run(o){if(!dbOk())throw new Error('数据库还没准备好，稍等几秒再试');var cfg=cfgs().filter(function(c){return c.id===o.fid})[0];if(!cfg)throw new Error('没找到这位好友');
+  var prog=o.prog||function(){},nm=nameOf(cfg);prog(0,'正在核对已导入的记录…');var have=await sigsOf(o.fid);
+  var b=Date.now().toString(36),now=Date.now(),recs=[],ths=[],skip=0,auto=(o.mode==='auto'||o.mode==='thread');
+  var fb=String(o.file||'').replace(/^.*[\/\\]/,'').replace(/\.(jsonl?|zip|txt|md|text)$/i,'').trim()||'导入的对话',tc={},mg=null;
+  (o.convs||[]).forEach(function(cv){if(cv.named)tc[cv.title]=(tc[cv.title]||0)+1});/* 自动分频道：认得出分段的各建一个，重名的补首条日期；认不出分段的并进一个以文件名命名的频道 */
+  (o.convs||[]).forEach(function(cv,ci){var tid=null;cv.msgs.forEach(function(m){var sg=o.src+'|'+cv.id+'|'+m.mid;if(have.has(sg)){skip++;return}have.add(sg);
+      var r={role:m.role,content:clip(m.text,CAP),friendId:o.fid,timestamp:m.ts,imp:{b:b,s:o.src,c:cv.id,m:m.mid}};if(m.role==='assistant')r.senderName=nm;
+      if(o.think&&m.think&&m.role==='assistant')r.thinking=clip(m.think,TCAP);
+      if(auto){if(!tid){if(cv.named){tid='thread_ci_'+now+'_'+ci;ths.push({id:tid,friendId:o.fid,name:(String(cv.title||'导入的对话')+(tc[cv.title]>1?' · '+dstr(cv.t0):'')).slice(0,60),memoryEnabled:true,created:cv.t0||now,imp:{b:b,s:o.src,c:cv.id}})}
+        else{if(!mg){mg={id:'thread_ci_'+now+'_m',friendId:o.fid,name:fb.slice(0,60),memoryEnabled:true,created:cv.t0||now,imp:{b:b,s:o.src,c:'merged'}};ths.push(mg)}else if(cv.t0&&cv.t0<mg.created)mg.created=cv.t0;tid=mg.id}}r.threadId=tid}
+      recs.push(r)})});
+  if(!recs.length)return {n:0,skip:skip,th:0,b:''};
+  recs.forEach(function(r,i){r._o=i});recs.sort(function(x,y){return (x.timestamp-y.timestamp)||(x._o-y._o)});
+  var prev=0;recs.forEach(function(r){var t=Math.max(Math.round(r.timestamp)||0,prev+1);r.timestamp=t;r.id='msg_'+t+'_ci'+b;prev=t;delete r._o});/* 主键数字＝时间戳且批内严格递增；批次后缀让不同批次、不同好友之间永不撞键 */
+  if(ths.length)await dbPutAll('chatThreads',ths);
+  for(var i=0;i<recs.length;i+=400){await dbPutAll('chatMessages',recs.slice(i,i+400));prog(Math.min(1,(i+400)/recs.length),'已写入 '+Math.min(recs.length,i+400)+' / '+recs.length);await new Promise(function(r){setTimeout(r,0)})}
+  var mn=recs[0].timestamp,mx=recs[recs.length-1].timestamp;if(o.mode==='main'){try{await _msgEdInvalM(cfg,null,mn)}catch(e){}}/* 只有并入主线才可能压到主线摘要的覆盖线 */
+  var H=hist();H.unshift({b:b,fid:o.fid,fn:nm,n:recs.length,th:ths.length,src:o.src,file:String(o.file||'').slice(0,60),t:Date.now(),min:mn,max:mx,mode:o.mode});saveHist(H);
+  try{_friendsBump()}catch(e){}refreshConv(o.fid);return {n:recs.length,skip:skip,th:ths.length,b:b,min:mn,max:mx,tid:ths.length?ths[0].id:''}}
+async function undo(b){if(!dbOk())throw new Error('数据库还没准备好');var H=hist(),h=H.filter(function(x){return x.b===b})[0];if(!h)return 0;var ids=[];
+  await new Promise(function(res,rej){try{var rq=db.transaction('chatMessages').objectStore('chatMessages').index('byFriend').openCursor(IDBKeyRange.only(h.fid));rq.onsuccess=function(){var c=rq.result;if(!c){res();return}var v=c.value;if(v&&v.imp&&v.imp.b===b)ids.push(c.primaryKey);c.continue()};rq.onerror=function(){rej(rq.error)}}catch(e){rej(e)}});
+  for(var i=0;i<ids.length;i+=500)await dbDeleteMany('chatMessages',ids.slice(i,i+500));
+  var ths=[];try{ths=(await dbGetAll('chatThreads')).filter(function(t){return t&&t.imp&&t.imp.b===b}).map(function(t){return t.id})}catch(e){}
+  if(ths.length){await dbDeleteMany('chatThreads',ths);for(var k=0;k<ths.length;k++){try{await dbDelete('chatSummaries','sum_'+ths[k])}catch(e){}}}
+  var cfg=cfgs().filter(function(c){return c.id===h.fid})[0];if(cfg&&h.mode==='main'&&h.min){try{await _msgEdInvalM(cfg,null,h.min)}catch(e){}}
+  saveHist(H.filter(function(x){return x.b!==b}));try{_friendsBump()}catch(e){}refreshConv(h.fid);return ids.length}
+function refreshConv(fid){try{if(typeof activeFriendId!=='undefined'&&activeFriendId===fid){if(typeof activeThreadId!=='undefined'&&activeThreadId&&typeof selectThread==='function')selectThread(fid,activeThreadId);else if(typeof selectFriend==='function')selectFriend(fid)}}catch(e){}}
+
+
+var CSSD='#io-ov .io-box.cid-wide{width:min(780px,96vw);max-height:min(880px,92vh)}'
+ +'#io-ov .cid-tabs{display:inline-flex;gap:4px;padding:3px;margin:0 0 14px;border-radius:11px;background:rgba(175,195,228,.07);border:1px solid rgba(165,188,230,.18)}'
+ +'#io-ov .cid-tabs button{border:0;background:none;font:inherit;font-size:.78rem;letter-spacing:.02em;color:var(--text-secondary);padding:6px 14px;border-radius:8px;cursor:pointer;transition:background .2s,color .2s}'
+ +'#io-ov .cid-tabs button.on{background:rgba(90,155,235,.22);color:var(--white)}'
+ +'body:not(.theme-infernal) #io-ov .cid-tabs{background:rgba(255,255,255,.55);border-color:rgba(160,190,230,.42)}body:not(.theme-infernal) #io-ov .cid-tabs button{color:#4a6288}body:not(.theme-infernal) #io-ov .cid-tabs button.on{background:rgba(90,155,235,.16);color:#142f5e}'
+ +'#io-ov .cid [hidden],#io-ov [hidden].io-prog-bar{display:none!important}'
+ +'#io-ov .cid-lab{margin:18px 2px 8px;font-size:.76rem;letter-spacing:.06em;color:var(--text-secondary);display:flex;justify-content:space-between;align-items:baseline;gap:8px}#io-ov .cid-lab small{font-size:.7rem;color:var(--text-muted);letter-spacing:0}'
+ +'#io-ov .cid-card{padding:12px 14px;border-radius:13px;background:rgba(175,195,228,.05);border:1px solid rgba(165,188,230,.16)}'
+ +'body:not(.theme-infernal) #io-ov .cid-lab{color:#33507d}body:not(.theme-infernal) #io-ov .cid-card{background:rgba(255,255,255,.5);border-color:rgba(160,190,230,.36)}'
+ +'#io-ov .cid-st{margin-top:10px;font-size:.78rem;line-height:1.7;color:var(--text-secondary);word-break:break-word}#io-ov .cid-st:empty{display:none}#io-ov .cid-st b{color:var(--white);font-weight:500}#io-ov .cid-st.err{color:#e59a9a}'
+ +'body:not(.theme-infernal) #io-ov .cid-st{color:#33507d}body:not(.theme-infernal) #io-ov .cid-st b{color:#142f5e}body:not(.theme-infernal) #io-ov .cid-st.err{color:#b4524e}'
+ +'#io-ov .cid-f{display:flex;align-items:center;gap:10px;margin-bottom:8px}#io-ov .cid-f label{flex:none;width:8.6em;font-size:.76rem;color:var(--text-secondary)}body:not(.theme-infernal) #io-ov .cid-f label{color:#33507d}'
+ +'#io-ov .cid-in,#io-ov .cid-sel{flex:1;min-width:0;width:100%;box-sizing:border-box;padding:8px 10px;border-radius:9px;border:1px solid rgba(165,188,230,.24);background:rgba(10,16,32,.35);color:var(--white);font:inherit;font-size:.8rem;outline:none}'
+ +'#io-ov .cid-in:focus,#io-ov .cid-sel:focus{border-color:var(--accent-light)}'
+ +'body:not(.theme-infernal) #io-ov .cid-in,body:not(.theme-infernal) #io-ov .cid-sel{background:rgba(255,255,255,.82);border-color:rgba(150,180,225,.45);color:#142f5e}'
+ +'#io-ov .cid-pv{margin-top:8px;font-size:.74rem;line-height:1.7;color:var(--text-muted);white-space:pre-wrap;word-break:break-word}#io-ov .cid-pv:empty{display:none}#io-ov .cid-pv b{color:var(--text-secondary);font-weight:500}'
+ +'body:not(.theme-infernal) #io-ov .cid-pv{color:#5a6f92}body:not(.theme-infernal) #io-ov .cid-pv b{color:#33507d}'
+ +'#io-ov .cid-bar{display:flex;gap:8px;align-items:center;margin-bottom:8px}#io-ov .cid-bar .cid-in{flex:1}'
+ +'#io-ov .cid-list{max-height:34vh;overflow:auto;margin:0 -4px}'
+ +'#io-ov .cid-row{display:flex;align-items:center;gap:10px;padding:8px 6px;border-top:1px solid rgba(165,188,230,.12);cursor:pointer;border-radius:8px}#io-ov .cid-row:first-child{border-top:0}#io-ov .cid-row:hover{background:rgba(175,195,228,.06)}'
+ +'#io-ov .cid-ck{flex:none;position:relative;width:16px;height:16px;border-radius:5px;border:1.5px solid rgba(165,188,230,.45);box-sizing:border-box}'
+ +'#io-ov .cid-row.on .cid-ck{background:rgba(110,165,235,.9);border-color:rgba(110,165,235,.9)}#io-ov .cid-row.on .cid-ck::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}'
+ +'#io-ov .cid-rm{flex:1;min-width:0}#io-ov .cid-rt{font-size:.82rem;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#io-ov .cid-rs{font-size:.72rem;color:var(--text-muted);margin-top:2px}'
+ +'body:not(.theme-infernal) #io-ov .cid-rt{color:#142f5e}body:not(.theme-infernal) #io-ov .cid-row{border-top-color:rgba(150,180,225,.25)}body:not(.theme-infernal) #io-ov .cid-row:hover{background:rgba(255,255,255,.5)}'
+ +'#io-ov .cid-seg{display:flex;gap:6px;margin:10px 0 4px}#io-ov .cid-seg button{flex:1;padding:8px 6px;border-radius:9px;border:1px solid rgba(165,188,230,.24);background:none;color:var(--text-secondary);font:inherit;font-size:.78rem;cursor:pointer}'
+ +'#io-ov .cid-seg button.on{border-color:rgba(110,165,235,.7);color:var(--white);background:rgba(90,155,235,.16)}'
+ +'body:not(.theme-infernal) #io-ov .cid-seg button{border-color:rgba(150,180,225,.45);color:#4a6288}body:not(.theme-infernal) #io-ov .cid-seg button.on{color:#142f5e;background:rgba(90,155,235,.12)}'
+ +'#io-ov .cid-chk{display:flex;align-items:flex-start;gap:8px;margin-top:10px;font-size:.78rem;color:var(--text-secondary);cursor:pointer}#io-ov .cid-chk input{margin-top:3px}#io-ov .cid-chk small{display:block;font-size:.72rem;color:var(--text-muted);margin-top:2px}body:not(.theme-infernal) #io-ov .cid-chk{color:#33507d}'
+ +'#io-ov .cid-sum{margin-top:12px;font-size:.78rem;line-height:1.7;color:var(--text-secondary)}#io-ov .cid-sum:empty{display:none}#io-ov .cid-sum b{color:var(--white);font-weight:500}'
+ +'body:not(.theme-infernal) #io-ov .cid-sum{color:#33507d}body:not(.theme-infernal) #io-ov .cid-sum b{color:#142f5e}#io-ov .cid-sum .btn{margin-top:10px}'
+ +'#io-ov .cid-h{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid rgba(165,188,230,.12)}#io-ov .cid-h:first-child{border-top:0}#io-ov .cid-h div{flex:1;min-width:0;font-size:.76rem;line-height:1.55;color:var(--text-secondary);word-break:break-word}#io-ov .cid-h b{color:var(--white);font-weight:500}'
+ +'body:not(.theme-infernal) #io-ov .cid-h b{color:#142f5e}body:not(.theme-infernal) #io-ov .cid-h div{color:#33507d}#io-ov .cid-sm{padding:6px 12px;font-size:.74rem;color:var(--light);background:rgba(175,195,228,.08);border-color:rgba(165,188,230,.3)}body:not(.theme-infernal) #io-ov .cid-sm{color:#2c4a7a;background:rgba(255,255,255,.78);border-color:rgba(150,180,225,.55)}#io-ov #cid-drop.dragover{border-color:var(--accent-light)}';
+function cssD(){if($('ib-cid-css'))return;var st=document.createElement('style');st.id='ib-cid-css';st.textContent=CSSD;document.head.appendChild(st)}
+var S=null;
+function bx(){return document.querySelector('#io-ov .io-box')}
+function q(sel){var o=$('io-ov');return o?o.querySelector(sel):null}
+function tabs(on){return '<div class="cid-tabs" role="tablist"><button type="button" data-t="site"'+(on==='site'?' class="on"':'')+'>全站存档</button><button type="button" data-t="chat"'+(on==='chat'?' class="on"':'')+'>官方聊天记录</button></div>'}
+function field(lab,id,ph){return '<div class="cid-f"><label for="'+id+'">'+lab+'</label><input class="cid-in" id="'+id+'" autocomplete="off" spellcheck="false"'+(ph?' placeholder="'+ph+'"':'')+'></div>'}
+function inject(){try{if(typeof _ioMode==='undefined'||_ioMode!=='import')return;var bd=$('io-bd');if(!bd||bd.querySelector('.cid-tabs'))return;cssD();bd.insertAdjacentHTML('afterbegin',tabs('site'))}catch(e){}}
+function mount(){cssD();var bd=$('io-bd'),ft=$('io-ft');if(!bd||!ft)return;var b=bx();if(b)b.classList.add('cid-wide');var sub=$('io-sub');if(sub)sub.textContent='导入聊天记录';
+  S={convs:[],sel:{},src:'',file:'',root:null,map:null,busy:false,mode:'auto',think:true};
+  bd.innerHTML=tabs('chat')+'<div class="cid">'
+   +'<div class="io-note">把 ChatGPT、Claude 的官方导出，或别的应用导出、自己记下的聊天记录，导进一位好友的聊天里：消息按原始时间落库，和站内消息一样能改、能删、进上下文。全程在本机完成，不联网。</div>'
+   +'<div class="io-drop" id="cid-drop"><div class="io-dt">点击选择文件，或把文件拖到这里</div><div class="io-ds">官方导出的压缩包 / conversations.json · 其它 JSON / JSONL · 逐行文本 .txt</div></div>'
+   +'<div class="cid-st" id="cid-st"></div>'
+   +'<div class="cid-pv">ChatGPT：设置 → 数据控制 → 导出数据，邮件里下载的压缩包；Claude：Settings → Privacy → Export data。压缩包可以直接选，也可以先解压再选里面的 conversations.json。别的应用导出的 JSON / JSONL（如 Operit）也能读，读完在「字段对应」里核对；自己记的「用户：…」「AI：…」逐行文本（.txt）也能读，时间按你填的日期范围排。</div>'
+   +'<div id="cid-map" hidden><div class="cid-lab">字段对应<small>别的应用导出的记录</small></div><div class="cid-card">'+field('角色字段','cid-kr','')+field('内容字段','cid-kc','')+field('时间字段','cid-kt','没有可留空')+field('哪个角色值是「我」','cid-ku','')
+   +'<button class="btn cid-sm" data-a="remap">按这几项重新读</button><div class="cid-pv" id="cid-pv"></div><div class="cid-pv">字段可以写路径，如 author.role；角色值是「我」的算我发的，system / tool 跳过，其余都算 TA。</div></div></div>'
+   +'<div id="cid-tmap" hidden><div class="cid-lab">对话格式与时间<small>自己记的逐行文本</small></div><div class="cid-card">'+field('我的名字（行首）','cid-tu','')+field('TA 的名字（行首）','cid-ta','')+field('开始日期','cid-t0','如 2024-03-01')+field('结束日期','cid-t1','如 2024-06-30')
+   +'<button class="btn cid-sm" data-a="retext">按这几项重新读</button><div class="cid-pv" id="cid-tpv"></div>'
+   +'<div class="cid-pv">每行以「名字：」开头算一条新消息（中文、英文冒号都认），不以名字开头的行接在上一条后面。时间按顺序均匀排进这段日期（开始那天 0 点到结束那天 23:59，也可以写到分钟：2024-03-01 20:30）；只填开始日期就从那天起每条隔一分钟；都不填就排在现在之前、每条隔一分钟。同一份文件换个日期再导，要先在「最近导入」撤销上一次，否则会当成导过的跳过。</div></div></div>'
+   +'<div id="cid-body" hidden><div class="cid-lab">选会话<small id="cid-cnt"></small></div><div class="cid-card"><div class="cid-bar"><input class="cid-in" id="cid-q" placeholder="按标题筛选" autocomplete="off"><button class="btn cid-sm" data-a="all">全选</button><button class="btn cid-sm" data-a="none">全不选</button></div><div class="cid-list" id="cid-list"></div></div>'
+   +'<div class="cid-lab">导入到</div><div class="cid-card"><select class="cid-sel" id="cid-fid"></select>'
+   +'<div class="cid-seg" id="cid-mode"><button type="button" data-v="auto" class="on">自动分频道</button><button type="button" data-v="main">并入主线</button></div>'
+   +'<label class="cid-chk" id="cid-think-row"><input type="checkbox" id="cid-think" checked><span>带上思考过程<small>导出里带思考内容的回复，思考放进那条消息上方的折叠块</small></span></label>'
+   +'<div class="cid-pv">默认自动分频道：官方导出里的每个对话窗口各建一个话题频道（频道名＝对话标题，重名的补上日期），认不出分段的（自己记的文本、没有标题的 JSON）全部进一个以文件名命名的频道，主线不受影响；想接着主线聊就选「并入主线」。图片与附件只留占位，工具调用不导入；同一份文件再导一次，已导入过的消息自动跳过。</div>'
+   +'<div class="cid-sum" id="cid-sum"></div><div class="io-prog-bar" id="cid-prog" hidden style="margin-top:10px"><div class="io-prog-fill" id="cid-fill" style="width:0"></div></div></div></div>'
+   +'<div id="cid-hist-wrap" hidden><div class="cid-lab">最近导入<small>撤销＝把那一次导入的消息整批删掉</small></div><div class="cid-card" id="cid-hist"></div></div>'
+   +'<input type="file" id="cid-file" accept=".json,.jsonl,.zip,.txt,.md,application/json,application/zip,text/plain,text/markdown" hidden></div>';
+  ft.innerHTML='<button class="btn" data-a="close">取消</button><button class="btn btn-primary" id="cid-go" data-a="go" disabled>开始导入</button>';
+  drawHist()}
+function unmount(){if(S&&S.busy)return;S=null;var b=bx();if(b)b.classList.remove('cid-wide');var sub=$('io-sub');if(sub)sub.textContent='导入全站存档';try{ioRenderSetup()}catch(e){}}
+function stat(html,err){var el=q('#cid-st');if(!el)return;el.innerHTML=html||'';el.classList.toggle('err',!!err)}
+async function load(file){if(!S)return;stat('正在读取 <b>'+E(file.name)+'</b> …');S.convs=[];S.sel={};S.file=file.name||'';['#cid-body','#cid-map','#cid-tmap'].forEach(function(x){var e=q(x);if(e)e.hidden=true});
+  var tv=null;try{var a0=dayMs((q('#cid-t0')||{}).value,false),a1=dayMs((q('#cid-t1')||{}).value,true);if(!isNaN(a0)&&!isNaN(a1)&&!(a0&&a1&&a1<=a0))tv={t0:a0,t1:a1}}catch(e){}
+  try{var r=await read(file);var p=parseText(r.text,r.name||file.name,tv,r.root);S.root=p.root;S.src=p.src;S.map=p.map;S.tmap=p.tmap||null;S.raw=r.text||'';S.convs=p.convs;S.rname=r.name||file.name}catch(e){stat(E((e&&e.message)||String(e)),true);return}
+  after()}
+function after(){var n=S.convs.length,m=0,th=0;S.convs.forEach(function(c,i){m+=c.msgs.length;th+=c.nth||0;S.sel[i]=1});
+  var tm=q('#cid-tmap');if(tm){tm.hidden=S.src!=='txt';if(S.src==='txt'&&S.tmap){q('#cid-tu').value=S.tmap.u||'';q('#cid-ta').value=S.tmap.a||'';tpv()}}
+  var mp=q('#cid-map');if(mp){mp.hidden=S.src!=='json';if(S.src==='json'&&S.map){q('#cid-kr').value=S.map.r||'';q('#cid-kc').value=S.map.c||'';q('#cid-kt').value=S.map.t||'';q('#cid-ku').value=S.map.u||'';pv()}}
+  if(!n){stat((S.src==='json'?'没在文件里找到能认的消息——在下面「字段对应」里指认角色、内容、时间字段后重新读。':(S.src==='txt'?'没认出「名字：内容」这样的逐行对话——在下面「对话格式与时间」里填双方名字（每行开头冒号前的那个词），再点「按这几项重新读」。':'文件里没有能导入的对话。')),true);var bd0=q('#cid-body');if(bd0)bd0.hidden=true;var g0=q('#cid-go');if(g0)g0.disabled=true;return}
+  stat('<b>'+E(SRC[S.src]||'JSON')+'</b> · '+n+' 段会话 · '+m+' 条消息'+(th?' · '+th+' 条带思考过程':'')+'<br>'+E(S.rname||S.file));
+  var tr=q('#cid-think-row');if(tr)tr.hidden=!th;
+  var sel=q('#cid-fid'),cs=cfgs();if(sel){var cur=(typeof activeFriendId!=='undefined'&&activeFriendId)?activeFriendId:'';sel.innerHTML=cs.length?cs.map(function(c){return '<option value="'+E(c.id)+'"'+(c.id===cur?' selected':'')+'>'+E(nameOf(c))+'</option>'}).join(''):'<option value="">还没有好友——先在 API 页添加一位</option>'}
+  var bd=q('#cid-body');if(bd)bd.hidden=false;drawList();drawSum()}
+function pv(){var el=q('#cid-pv');if(!el)return;var c=S.convs[0];if(!c){el.textContent='';return}el.innerHTML='读到的前几条：\n'+c.msgs.slice(0,3).map(function(m){return '<b>'+(m.role==='user'?'我':'TA')+'</b>：'+E(m.text.replace(/\s+/g,' ').slice(0,60))}).join('\n')}
+function tpv(){var el=q('#cid-tpv');if(!el)return;var c=S.convs[0];if(!c){el.textContent='';return}el.innerHTML='读到的前几条（时间是排出来的）：\n'+c.msgs.slice(0,3).map(function(m){return '<b>'+(m.role==='user'?'我':'TA')+'</b> '+tstr(m.ts)+'：'+E(m.text.replace(/\s+/g,' ').slice(0,50))}).join('\n')}
+function retext(){if(!S||!S.raw)return;var t0=dayMs(q('#cid-t0').value,false),t1=dayMs(q('#cid-t1').value,true);
+  if(isNaN(t0)||isNaN(t1)){stat('日期看不懂——写成 2024-03-01 这样（也认 2024/3/1、2024.3.1、20240301）',true);return}if(t0&&t1&&t1<=t0){stat('结束日期要晚于开始日期',true);return}
+  var tt=parseChatText(S.raw,{tu:q('#cid-tu').value,ta:q('#cid-ta').value,t0:t0,t1:t1},S.file);S.src='txt';S.convs=tt.convs;S.tmap=tt.tmap;S.sel={};
+  if(!tt.convs.length){stat('按这两个名字没认出对话——看看文件里每行开头写的是什么（名字后面要跟冒号）',true);var bd=q('#cid-body');if(bd)bd.hidden=true;return}after()}
+function remap(){if(!S||!S.root)return;var ov={r:q('#cid-kr').value.trim(),c:q('#cid-kc').value.trim(),t:q('#cid-kt').value.trim(),u:q('#cid-ku').value.trim()};
+  var g=parseGeneric(S.root,ov,S.file.replace(/\.(jsonl?|zip|txt)$/i,''));fixTimes(g.convs,Date.now());S.src='json';S.convs=g.convs;S.map=g.map;S.sel={};after()}
+function visible(){var k=String((q('#cid-q')||{}).value||'').trim().toLowerCase(),out=[];S.convs.forEach(function(c,i){if(!k||c.title.toLowerCase().indexOf(k)>=0)out.push(i)});return out}
+function drawList(){var host=q('#cid-list'),cnt=q('#cid-cnt');if(!host)return;var v=visible();
+  host.innerHTML=v.map(function(i){var c=S.convs[i];return '<div class="cid-row'+(S.sel[i]?' on':'')+'" data-i="'+i+'"><i class="cid-ck"></i><div class="cid-rm"><div class="cid-rt">'+E(c.title)+'</div><div class="cid-rs">'+c.msgs.length+' 条 · '+dstr(c.t0)+(dstr(c.t1)!==dstr(c.t0)?' – '+dstr(c.t1):'')+'</div></div></div>'}).join('')||'<div class="cid-st">没有匹配的会话</div>';
+  if(cnt)cnt.textContent='共 '+S.convs.length+' 段'}
+function picked(){var out=[];S.convs.forEach(function(c,i){if(S.sel[i])out.push(c)});return out}
+function autoDesc(ps){var nn=ps.filter(function(c){return c.named}).length,un=ps.length-nn,fb=String(S.file||'').replace(/\.(jsonl?|zip|txt|md|text)$/i,'')||'导入的对话';
+  return (nn?'识别出的 '+nn+' 段会话各建一个话题频道':'')+(un?(nn?'，':'')+(nn?'其余':'全部')+'并进一个频道「'+E(fb)+'」':'')}
+function drawSum(){var el=q('#cid-sum'),go=q('#cid-go');if(!el)return;var ps=picked(),n=0,nu=0,nd=0,th=0,t0=0,t1=0;
+  ps.forEach(function(c){n+=c.msgs.length;nu+=c.nu||0;nd+=c.nd||0;th+=c.nth||0;if(!t0||c.t0<t0)t0=c.t0;if(c.t1>t1)t1=c.t1});
+  var fid=(q('#cid-fid')||{}).value||'',c=cfgs().filter(function(x){return x.id===fid})[0];
+  if(!ps.length){el.innerHTML='还没选会话。';if(go)go.disabled=true;return}
+  el.innerHTML='将导入 <b>'+ps.length+'</b> 段会话、<b>'+n+'</b> 条消息（我 '+nu+' / TA '+(n-nu)+'），'+dstr(t0)+(dstr(t1)!==dstr(t0)?' – '+dstr(t1):'')+(c?'，进「'+E(nameOf(c))+'」'+(S.mode==='main'?'的主线':'：'+autoDesc(ps)):'')+'。'
+    +(nd?'<br>其中 '+nd+' 条原文件没有时间，按顺序接在前一条之后。':'')+(S.src==='txt'?'<br>文本没有时间，按「对话格式与时间」里的日期均匀排'+((q('#cid-t0')||{}).value||(q('#cid-t1')||{}).value?'':'——现在没填日期，排在现在之前')+'。':'')+(th&&S.think?'<br>'+th+' 条回复带思考过程，一并导入。':'');
+  if(go)go.disabled=!c||S.busy}
+async function go(){if(!S||S.busy)return;var ps=picked(),fid=(q('#cid-fid')||{}).value||'',c=cfgs().filter(function(x){return x.id===fid})[0];if(!ps.length||!c)return;
+  var n=0;ps.forEach(function(x){n+=x.msgs.length});var ok=true;try{if(typeof ibConfirmX==='function')ok=await ibConfirmX('把 '+n+' 条消息导入到「'+nameOf(c)+'」？\n'+(S.mode==='main'?'并入主线。':'自动分频道：'+autoDesc(ps).replace(/<[^>]+>/g,'')+'。')+'之后可以在本页「最近导入」一键撤销。','导入')}catch(e){}if(!ok)return;
+  S.busy=true;try{_ioBusy=true}catch(e){}var xb=$('io-x');if(xb)xb.disabled=true;var gb=q('#cid-go'),pg=q('#cid-prog'),el=q('#cid-sum');if(gb)gb.disabled=true;if(pg){pg.hidden=false;q('#cid-fill').style.width='0'}
+  try{var r=await run({fid:fid,mode:S.mode,think:S.think,convs:ps,src:S.src,file:S.file,prog:function(p,t){var f=q('#cid-fill');if(f)f.style.width=Math.round(p*100)+'%';var s=q('#cid-sum');if(s&&t)s.textContent=t}});
+    el=q('#cid-sum');if(el)el.innerHTML=r.n?('已导入 <b>'+r.n+'</b> 条'+(r.th?'，新建 '+r.th+' 个话题频道':'')+(r.skip?'，跳过已导入过的 '+r.skip+' 条':'')+'。<br><button class="btn cid-sm" data-a="goto" data-f="'+E(fid)+'" data-t="'+E(r.tid||'')+'">打开和'+E(nameOf(c))+'的聊天</button>'):('这些消息之前都导入过了（跳过 '+r.skip+' 条），没有新写入。');
+    T(r.n?('已导入 '+r.n+' 条'):'没有新消息要导入')}
+  catch(e){el=q('#cid-sum');if(el)el.textContent='导入失败：'+((e&&e.message)||e);T('导入失败')}
+  S.busy=false;try{_ioBusy=false}catch(e){}if(xb)xb.disabled=false;pg=q('#cid-prog');if(pg)pg.hidden=true;gb=q('#cid-go');if(gb)gb.disabled=false;drawHist()}
+function drawHist(){var w=q('#cid-hist-wrap'),host=q('#cid-hist');if(!w||!host)return;var H=hist();w.hidden=!H.length;
+  host.innerHTML=H.map(function(h){return '<div class="cid-h"><div><b>'+E(h.fn)+'</b> · '+E(SRC[h.src]||'JSON')+' · '+h.n+' 条'+(h.th?' · '+h.th+' 个频道':'')+'<br>'+tstr(h.t)+(h.file?' · '+E(h.file):'')+'</div><button class="btn cid-sm" data-a="undo" data-b="'+E(h.b)+'">撤销</button></div>'}).join('')}
+function bindAll(){var ov=$('io-ov');if(!ov||ov._cid)return;ov._cid=1;
+  ov.addEventListener('click',async function(ev){var tb=ev.target.closest('.cid-tabs button');if(tb&&ov.contains(tb)){if(tb.dataset.t==='chat'){if(!S)mount()}else if(S)unmount();return}
+    if(!S)return;var dz=ev.target.closest('#cid-drop');if(dz){var fi=q('#cid-file');if(fi){fi.value='';fi.click()}return}
+    var row=ev.target.closest('.cid-row');if(row){var i=+row.dataset.i;if(S.sel[i])delete S.sel[i];else S.sel[i]=1;row.classList.toggle('on',!!S.sel[i]);drawSum();return}
+    var mb=ev.target.closest('#cid-mode button');if(mb){S.mode=mb.dataset.v;[].forEach.call(q('#cid-mode').querySelectorAll('button'),function(x){x.classList.toggle('on',x===mb)});drawSum();return}
+    var t=ev.target.closest('[data-a]');if(!t||!ov.contains(t))return;var a=t.dataset.a;
+    if(a==='close'){if(!S.busy)ioClose();return}
+    if(a==='all'||a==='none'){visible().forEach(function(i){if(a==='all')S.sel[i]=1;else delete S.sel[i]});drawList();drawSum();return}
+    if(a==='remap'){remap();return}if(a==='retext'){retext();return}if(a==='go'){go();return}
+    if(a==='undo'){var b=t.dataset.b,h=hist().filter(function(x){return x.b===b})[0];if(!h)return;var ok=true;try{if(typeof ibConfirmX==='function')ok=await ibConfirmX('撤销这次导入？\n会删掉当时导进「'+h.fn+'」的 '+h.n+' 条消息'+(h.th?'与 '+h.th+' 个话题频道':'')+'。','撤销')}catch(e){}if(!ok)return;
+      try{var n=await undo(b);T('已撤销，删掉 '+n+' 条')}catch(e){T('撤销失败：'+((e&&e.message)||e))}drawHist();return}
+    if(a==='goto'){var fid=t.dataset.f,tid=t.dataset.t||'';try{ioClose()}catch(e){}try{if(typeof navTo==='function')navTo('chat')}catch(e){}setTimeout(function(){try{if(tid&&typeof selectThread==='function')selectThread(fid,tid);else if(typeof selectFriend==='function')selectFriend(fid)}catch(e){}},120);return}});
+  ov.addEventListener('change',function(ev){if(!S)return;var id=ev.target&&ev.target.id;if(id==='cid-file'){var f=ev.target.files&&ev.target.files[0];if(f)load(f)}else if(id==='cid-fid')drawSum();else if(id==='cid-think'){S.think=!!ev.target.checked;drawSum()}});
+  ov.addEventListener('input',function(ev){if(!S)return;if(ev.target&&ev.target.id==='cid-q'){clearTimeout(S._qt);S._qt=setTimeout(drawList,160)}});
+  ov.addEventListener('dragover',function(ev){if(!S)return;var dz=ev.target.closest&&ev.target.closest('#cid-drop');if(dz){ev.preventDefault();dz.classList.add('dragover')}});
+  ov.addEventListener('dragleave',function(ev){var dz=ev.target.closest&&ev.target.closest('#cid-drop');if(dz)dz.classList.remove('dragover')});
+  ov.addEventListener('drop',function(ev){if(!S)return;var dz=ev.target.closest&&ev.target.closest('#cid-drop');if(!dz)return;ev.preventDefault();dz.classList.remove('dragover');var f=ev.dataTransfer&&ev.dataTransfer.files&&ev.dataTransfer.files[0];if(f)load(f)})}
+function hook(){if(window._cidHooked)return;window._cidHooked=1;bindAll();
+  var R0=window.ioRenderSetup;if(typeof R0==='function')window.ioRenderSetup=function(){S=null;var b=bx();if(b)b.classList.remove('cid-wide');var r=R0.apply(this,arguments);inject();return r};
+  var C0=window.ioClose;if(typeof C0==='function')window.ioClose=function(){if(S&&S.busy)return;var r=C0.apply(this,arguments);S=null;var b=bx();if(b)b.classList.remove('cid-wide');return r}}
+try{if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',hook);else hook()}catch(e){}
+window._ibChatImpD={mount:mount,read:read,parseText:parseText,run:run,undo:undo,hist:hist};
+
+})();
+</script>
 </body>
 </html>
