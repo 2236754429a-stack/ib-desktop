@@ -20712,6 +20712,7 @@ async function _execWsOps(ops,authorName,cfg){
       results.push({type:'help',ok:true,pendingConfirm:true,first:!_seen,helpKey:_hk,author:authorName,cfgId:cfg&&cfg.id});continue;
     }
     if(op.type==='ask'){results.push({type:'ask',ok:true});continue}/* 选项卡不执行任何操作：占位结果保持 results 与 ops 一一对应 */
+    if(op.type==='mobile'){results.push({type:op.kind,ok:false,mobile:true,fed:true,reason:'手机端专属操作，电脑端只展示，不执行'});continue}
     if(op.type==='gen_image'){
       var _giPrompt=(op.prompt||'').trim();
       if(op.truncated&&!_giPrompt){results.push({type:'gen_image',prompt:'',ok:false,reason:'输出被截断，提示词不完整'});continue}
